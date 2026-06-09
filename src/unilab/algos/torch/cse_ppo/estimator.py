@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -137,7 +139,7 @@ class CSEEstimator(nn.Module):
             )
         target = next_critic_obs[:, start:end].detach()
         pred = self.decoder(self.encoder(obs_history))
-        weights = self.target_weights.to(pred.device)
+        weights = cast(torch.Tensor, self.target_weights).to(pred.device)
         loss = (weights * F.mse_loss(pred, target, reduction="none")).mean()
 
         self.optimizer.zero_grad()

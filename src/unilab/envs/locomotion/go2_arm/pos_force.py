@@ -21,8 +21,9 @@ sphere frame (terrain-relative z), not the arm-base-local frame used by
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -111,9 +112,9 @@ class _ForceSchedule:
     def __init__(
         self,
         num_envs: int,
-        mag_range: tuple[float, float],
-        interval_range: tuple[int, int],
-        duration_range: tuple[int, int],
+        mag_range: Sequence[float],
+        interval_range: Sequence[int],
+        duration_range: Sequence[int],
         prob: float,
         dtype: Any,
     ):
@@ -443,7 +444,10 @@ class Go2ArmPosForceDRProvider(LocomotionDRProvider):
             else:
                 sliced_info[k] = v
         actor_raw, critic_raw = env._compute_raw_obs(sliced_info, env_ids=env_ids)
-        return env._update_history(actor_raw, critic_raw, env_ids=env_ids)
+        return cast(
+            "dict[str, np.ndarray]",
+            env._update_history(actor_raw, critic_raw, env_ids=env_ids),
+        )
 
 
 # ── Environment ──────────────────────────────────────────────────────────────
@@ -547,20 +551,36 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         b_int = _steps(cmds.push_base_interval_s)
         b_dur = _steps(cmds.push_base_duration_s)
         self._sched_gripper_cmd = _ForceSchedule(
-            num_envs, tuple(cmds.max_push_force_xyz_gripper_cmd), g_int, g_dur,
-            cmds.gripper_forced_prob_cmd, dtype,
+            num_envs,
+            tuple(cmds.max_push_force_xyz_gripper_cmd),
+            g_int,
+            g_dur,
+            cmds.gripper_forced_prob_cmd,
+            dtype,
         )
         self._sched_gripper_ext = _ForceSchedule(
-            num_envs, tuple(cmds.max_push_force_xyz_gripper_ext), g_int, g_dur,
-            cmds.gripper_forced_prob_ext, dtype,
+            num_envs,
+            tuple(cmds.max_push_force_xyz_gripper_ext),
+            g_int,
+            g_dur,
+            cmds.gripper_forced_prob_ext,
+            dtype,
         )
         self._sched_base_cmd = _ForceSchedule(
-            num_envs, tuple(cmds.max_push_force_xyz_base_cmd), b_int, b_dur,
-            cmds.base_forced_prob_cmd, dtype,
+            num_envs,
+            tuple(cmds.max_push_force_xyz_base_cmd),
+            b_int,
+            b_dur,
+            cmds.base_forced_prob_cmd,
+            dtype,
         )
         self._sched_base_ext = _ForceSchedule(
-            num_envs, tuple(cmds.max_push_force_xyz_base_ext), b_int, b_dur,
-            cmds.base_forced_prob_ext, dtype,
+            num_envs,
+            tuple(cmds.max_push_force_xyz_base_ext),
+            b_int,
+            b_dur,
+            cmds.base_forced_prob_ext,
+            dtype,
         )
 
         # Command resample timer.
@@ -641,7 +661,9 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         base_yaw_quat = np_yaw_quat(self._backend.get_base_quat())
         center = np.zeros((self._num_envs, 3), dtype=self._np_dtype)
         center[:, :2] = base_pos[:, :2]
-        center = center + np_quat_apply(base_yaw_quat, np.tile(self._ee_center_offset, (self._num_envs, 1)))
+        center = center + np_quat_apply(
+            base_yaw_quat, np.tile(self._ee_center_offset, (self._num_envs, 1))
+        )
         return center
 
     def _collision_check(self, starts: np.ndarray, goals: np.ndarray) -> np.ndarray:
@@ -814,9 +836,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         arm_jitter = np.random.uniform(
             -cfg.arm_init_dof_pos_range, cfg.arm_init_dof_pos_range, size=(n, NUM_ARM)
         ).astype(qpos.dtype)
-        qpos[:, base + NUM_LEG : base + NUM_ACTIONS] = (
-            self.default_angles[NUM_LEG:] + arm_jitter
-        )
+        qpos[:, base + NUM_LEG : base + NUM_ACTIONS] = self.default_angles[NUM_LEG:] + arm_jitter
 
     def _sample_motor_strength(self, env_ids: np.ndarray) -> None:
         cfg = self._cfg.domain_rand
@@ -968,9 +988,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
 
     # ── observations ──────────────────────────────────────────────────────
 
-    def _compute_raw_obs(
-        self, info: dict, env_ids: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def _compute_raw_obs(self, info: dict, env_ids: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Return (actor_raw, critic_raw) single-step observations for env_ids."""
         dtype = self._np_dtype
         s = self._cfg.obs_scales
@@ -1223,9 +1241,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
 
     def _reward_hip_pos(self, ctx: RewardContext) -> np.ndarray:
         hip_idx = np.asarray([0, 3, 6, 9])
-        return np.sum(
-            np.square(ctx.dof_pos[:, hip_idx] - self.default_angles[hip_idx]), axis=1
-        )
+        return np.sum(np.square(ctx.dof_pos[:, hip_idx] - self.default_angles[hip_idx]), axis=1)
 
     def _reward_torque_limits(self, ctx: RewardContext) -> np.ndarray:
         margin = self._reward_cfg.soft_torque_limit * self._torque_limits

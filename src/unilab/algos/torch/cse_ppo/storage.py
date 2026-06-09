@@ -27,7 +27,16 @@ class CSERolloutStorage:
             self.action_sigma: torch.Tensor | None = None
 
         def clear(self) -> None:
-            self.__init__()
+            self.observations = None
+            self.critic_observations = None
+            self.next_critic_observations = None
+            self.actions = None
+            self.rewards = None
+            self.dones = None
+            self.values = None
+            self.actions_log_prob = None
+            self.action_mean = None
+            self.action_sigma = None
 
     def __init__(
         self,
@@ -54,7 +63,10 @@ class CSERolloutStorage:
                 raise ValueError("privileged_obs_shape cannot contain None values")
             privileged_obs_shape = cast(tuple[int, ...], self.privileged_obs_shape)
             self.privileged_observations = torch.zeros(
-                self.num_transitions_per_env, self.num_envs, *privileged_obs_shape, device=self.device
+                self.num_transitions_per_env,
+                self.num_envs,
+                *privileged_obs_shape,
+                device=self.device,
             )
             self.next_privileged_observations = torch.zeros_like(self.privileged_observations)
         else:
@@ -80,9 +92,12 @@ class CSERolloutStorage:
     def add_transition(self, transition: Transition) -> None:
         if self.step >= self.num_transitions_per_env:
             raise AssertionError("Rollout buffer overflow")
-        for name in ("observations", "actions", "rewards", "dones", "values", "actions_log_prob"):
-            if getattr(transition, name) is None:
-                raise ValueError(f"transition.{name} is required")
+        if transition.observations is None or transition.actions is None:
+            raise ValueError("transition.observations and transition.actions are required")
+        if transition.rewards is None or transition.dones is None:
+            raise ValueError("transition.rewards and transition.dones are required")
+        if transition.values is None or transition.actions_log_prob is None:
+            raise ValueError("transition.values and transition.actions_log_prob are required")
         if transition.action_mean is None or transition.action_sigma is None:
             raise ValueError("transition action distribution stats are required")
 
@@ -110,14 +125,20 @@ class CSERolloutStorage:
     def compute_returns(self, last_values: torch.Tensor, gamma: float, lam: float) -> None:
         advantage = torch.zeros_like(last_values)
         for step in reversed(range(self.num_transitions_per_env)):
-            next_values = last_values if step == self.num_transitions_per_env - 1 else self.values[step + 1]
+            next_values = (
+                last_values if step == self.num_transitions_per_env - 1 else self.values[step + 1]
+            )
             next_is_not_terminal = 1.0 - self.dones[step].float()
-            delta = self.rewards[step] + next_is_not_terminal * gamma * next_values - self.values[step]
+            delta = (
+                self.rewards[step] + next_is_not_terminal * gamma * next_values - self.values[step]
+            )
             advantage = delta + next_is_not_terminal * gamma * lam * advantage
             self.returns[step] = advantage + self.values[step]
 
         self.advantages = self.returns - self.values
-        self.advantages = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8)
+        self.advantages = (self.advantages - self.advantages.mean()) / (
+            self.advantages.std() + 1e-8
+        )
 
     def mini_batch_generator(self, num_mini_batches: int, num_epochs: int = 8):
         batch_size = self.num_envs * self.num_transitions_per_env
