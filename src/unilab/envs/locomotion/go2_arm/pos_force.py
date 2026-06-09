@@ -347,8 +347,11 @@ class RewardConfig:
 
 @dataclass
 class HistoryConfig:
+    # Actor sees a long proprioceptive history (UniFP frame_stack=32); the CSE
+    # estimator compresses it. The critic sees the current privileged step, so
+    # the estimator target is critic_obs[:, :12] (estimator.target_start=0).
     num_actor_history: int = 32
-    num_critic_history: int = 3
+    num_critic_history: int = 1
 
 
 @dataclass
