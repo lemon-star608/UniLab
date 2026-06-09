@@ -1,0 +1,982 @@
+"""Go2 + AirBot-Play unified position-force whole-body control task.
+
+Faithful port of the UniFP (CoRL 2025) ``go2arm_pos_force`` task into UniLab's
+NpEnv contract. Unlike ``Go2ArmManipLoco`` (IK-driven arm), here all 18 joints
+(12 legs + 6 arm) are controlled by the RL policy through a Python PD law fed to
+``<motor>`` actuators, and the policy jointly tracks end-effector position and
+commanded forces. Phase 1 (this file) brings up locomotion + the full
+observation/command layout with the force channels present but zeroed; the
+external-force push controller and force rewards are added in Phase 2.
+
+Control law (UniFP ``_compute_torques``), recomputed every physics substep:
+
+    target  = default_dof_pos + action * motor_strength * action_scale
+    torque  = kp * (target - q) - kd * qd
+    torque  = clip(torque, -torque_limit, torque_limit)
+
+The end-effector goal is expressed in UniFP's yaw-aligned, gravity-referenced
+sphere frame (terrain-relative z), not the arm-base-local frame used by
+``manip_loco``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+import numpy as np
+
+from unilab.assets import ASSETS_ROOT_PATH
+from unilab.base import registry
+from unilab.base.backend import create_backend
+from unilab.base.np_env import NpEnvState
+from unilab.base.scene import SceneCfg
+from unilab.dr.types import ResetPlan
+from unilab.dtype_config import get_global_dtype
+from unilab.envs.common.rotation import (
+    np_quat_apply,
+    np_quat_apply_inverse,
+    np_yaw_quat,
+)
+from unilab.envs.locomotion.common.dr_provider import LocomotionDRProvider
+from unilab.envs.locomotion.common.rewards import RewardContext
+from unilab.envs.locomotion.go2_arm.base import (
+    Go2ArmBaseCfg,
+    Go2ArmBaseEnv,
+    Go2ArmSensor,
+    build_go2_arm_position_gains,
+)
+
+# Command vector layout (15 dims), matching UniFP INDEX_* constants.
+CMD_VEL = slice(0, 3)  # base lin_vel_x, lin_vel_y, ang_vel_yaw
+CMD_EE_POS = slice(3, 6)  # EE goal in sphere coords [radius, pitch, yaw]
+CMD_EE_ORN = slice(6, 9)  # EE goal orientation [roll, pitch, yaw]
+CMD_EE_FORCE = slice(9, 12)  # EE force command [fx, fy, fz]
+CMD_BASE_FORCE = slice(12, 15)  # base force command [fx, fy, fz]
+NUM_COMMANDS = 15
+
+NUM_ACTIONS = 18
+NUM_LEG = 12
+NUM_ARM = 6
+
+
+def _default_model_file() -> str:
+    return str(ASSETS_ROOT_PATH / "robots" / "go2_arm" / "scene_pos_force.xml")
+
+
+def _default_scene() -> SceneCfg:
+    return SceneCfg(model_file=_default_model_file())
+
+
+def sphere2cart(sphere: np.ndarray) -> np.ndarray:
+    """UniFP convention: sphere [l, pitch, yaw] -> cart [x, y, z]."""
+    l = sphere[..., 0]
+    pitch = sphere[..., 1]
+    yaw = sphere[..., 2]
+    x = l * np.cos(pitch) * np.cos(yaw)
+    y = l * np.cos(pitch) * np.sin(yaw)
+    z = l * np.sin(pitch)
+    return np.stack([x, y, z], axis=-1)
+
+
+def cart2sphere(cart: np.ndarray) -> np.ndarray:
+    """UniFP convention: cart [x, y, z] -> sphere [l, pitch, yaw]."""
+    cart = np.asarray(cart)
+    xy_len = np.linalg.norm(cart[..., :2], axis=-1)
+    l = np.linalg.norm(cart, axis=-1)
+    pitch = np.arctan2(cart[..., 2], xy_len)
+    yaw = np.arctan2(cart[..., 1], cart[..., 0])
+    return np.stack([l, pitch, yaw], axis=-1)
+
+
+def _roll_pitch_from_quat(quat: np.ndarray) -> np.ndarray:
+    """Extract (roll, pitch) from a (w, x, y, z) quaternion batch."""
+    w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+    roll = np.arctan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+    pitch = np.arcsin(np.clip(2.0 * (w * y - z * x), -1.0, 1.0))
+    return np.stack([roll, pitch], axis=1)
+
+
+# ── Configuration dataclasses ────────────────────────────────────────────────
+
+
+@dataclass
+class ObsScales:
+    lin_vel: float = 2.0
+    ang_vel: float = 0.25
+    dof_pos: float = 1.0
+    dof_vel: float = 0.05
+    ee_force: float = 0.01
+    base_force: float = 0.01
+    ee_sphe_radius: float = 0.5
+    ee_sphe_pitch: float = 1.0
+    ee_sphe_yaw: float = 1.3
+    ee_orn: float = 1.0
+
+
+@dataclass
+class PosForceNoiseConfig:
+    level: float = 0.0
+    scale_joint_angle: float = 0.03
+    scale_joint_vel: float = 0.5
+    scale_gyro: float = 0.2
+    scale_gravity: float = 0.05
+    scale_ang_vel: float = 0.2
+    scale_orn: float = 0.05
+
+
+@dataclass
+class SphereCenter:
+    x_offset: float = 0.2  # forward of base, in yaw frame
+    y_offset: float = 0.0
+    z_invariant_offset: float = 0.6  # terrain-relative height of the sphere center
+
+
+@dataclass
+class GoalEEConfig:
+    command_mode: str = "sphere"
+    arm_induced_pitch: float = 0.38
+    sphere_center: SphereCenter = field(default_factory=SphereCenter)
+    # Sphere sampling ranges [radius, pitch, yaw] (UniFP pos_l / pos_p / pos_y).
+    pos_l: list[float] = field(default_factory=lambda: [0.25, 0.60])
+    pos_p: list[float] = field(default_factory=lambda: [-2.0 * np.pi / 5.0, 2.0 * np.pi / 5.0])
+    pos_y: list[float] = field(default_factory=lambda: [-3.0 * np.pi / 5.0, 3.0 * np.pi / 5.0])
+    delta_orn_r: list[float] = field(default_factory=lambda: [-0.5, 0.5])
+    delta_orn_p: list[float] = field(default_factory=lambda: [-0.5, 0.5])
+    delta_orn_y: list[float] = field(default_factory=lambda: [-0.5, 0.5])
+    init_pos_start: list[float] = field(default_factory=lambda: [0.5, np.pi / 4.0, 0.0])
+    init_pos_end: list[float] = field(default_factory=lambda: [0.5, 0.0, 0.0])
+    traj_time: list[float] = field(default_factory=lambda: [1.0, 3.0])
+    hold_time: list[float] = field(default_factory=lambda: [0.5, 2.0])
+    collision_upper_limits: list[float] = field(default_factory=lambda: [0.25, 0.2, -0.15])
+    collision_lower_limits: list[float] = field(default_factory=lambda: [-0.7, -0.2, -0.8])
+    underground_limit: float = -0.7
+    num_collision_check_samples: int = 10
+    num_resample_attempts: int = 10
+
+
+@dataclass
+class PosForceCommandsConfig:
+    lin_vel_x: list[float] = field(default_factory=lambda: [-0.6, 0.6])
+    lin_vel_y: list[float] = field(default_factory=lambda: [-0.4, 0.4])
+    ang_vel_yaw: list[float] = field(default_factory=lambda: [-0.6, 0.6])
+    lin_vel_x_clip: float = 0.1
+    lin_vel_y_clip: float = 0.1
+    ang_vel_yaw_clip: float = 0.2
+    zero_vel_cmd_prob: float = 0.3
+    resample_time_s: float = 5.0
+    # Force command magnitudes (N). Used by the Phase 2 push controller.
+    max_push_force_xyz_gripper: list[float] = field(default_factory=lambda: [-18.0, 18.0])
+    max_push_force_xyz_base: list[float] = field(default_factory=lambda: [-25.0, 25.0])
+    gripper_force_kp: float = 200.0
+    base_force_kp: float = 200.0
+    # Force curriculum: external forces start after this many control steps.
+    force_start_step: int = 6000
+
+
+@dataclass
+class PosForceControlConfig:
+    action_scale: float = 0.25
+    arm_action_scale: float = 0.12
+    simulate_action_latency: bool = False
+    action_delay_steps: int = 0
+    # PD gains (UniFP go2arm); reused via build_go2_arm_position_gains.
+    Kp: float = 35.0
+    Kd: float = 0.5
+    leg_kp: float = 60.0
+    leg_kd: float = 2.0
+    arm_kp: list[float] = field(default_factory=lambda: [95.0, 115.0, 100.0, 52.0, 54.0, 55.0])
+    arm_kd: list[float] = field(default_factory=lambda: [3.5, 3.8, 2.5, 1.5, 1.5, 1.5])
+    # Per-joint torque limits (legs + joint1-3: 24 Nm, wrist joint4-6: 8 Nm).
+    leg_torque_limit: float = 24.0
+    arm_torque_limit: list[float] = field(default_factory=lambda: [24.0, 24.0, 24.0, 8.0, 8.0, 8.0])
+
+
+@dataclass
+class PosForceDomainRandConfig:
+    randomize_friction: bool = True
+    friction_range: list[float] = field(default_factory=lambda: [0.5, 1.8])
+    randomize_base_mass: bool = True
+    added_mass_range: list[float] = field(default_factory=lambda: [0.0, 4.0])
+    randomize_base_com: bool = True
+    added_com_range: list[float] = field(default_factory=lambda: [-0.05, 0.05])
+    randomize_motor_strength: bool = True
+    leg_motor_strength_range: list[float] = field(default_factory=lambda: [0.85, 1.15])
+    arm_motor_strength_range: list[float] = field(default_factory=lambda: [0.85, 1.15])
+    # Root-velocity push DR (handled by the shared interval push plan).
+    push_robots: bool = True
+    push_interval: int = 400
+    max_force: list[float] = field(default_factory=lambda: [0.3, 0.3, 0.0])
+    push_body_name: str = "base"
+
+
+@dataclass
+class GaitConfig:
+    cycle_time: float = 0.64
+    target_joint_pos_scale: float = 0.17
+    target_joint_pos_thd: float = 0.5
+
+
+@dataclass
+class RewardConfig:
+    scales: dict[str, float]
+    tracking_sigma: float = 0.25
+    base_height_target: float = 0.40
+    soft_dof_pos_limit: float = 0.8
+    soft_torque_limit: float = 0.9
+    max_contact_force: float = 200.0
+    sigma_force: float = 1.0 / 50.0
+
+
+@dataclass
+class HistoryConfig:
+    num_actor_history: int = 32
+    num_critic_history: int = 3
+
+
+@dataclass
+class ResetConfig:
+    leg_pos_scale_range: list[float] = field(default_factory=lambda: [0.5, 1.5])
+    arm_init_dof_pos_range: float = 0.3
+    yaw_range: float = np.pi / 2.0
+
+
+@registry.envcfg("Go2ArmPosForce")
+@dataclass
+class Go2ArmPosForceCfg(Go2ArmBaseCfg):
+    scene: SceneCfg = field(default_factory=_default_scene)
+    model_file: str = field(default_factory=_default_model_file)
+    max_episode_seconds: float = 20.0
+    sim_dt: float = 0.005
+    ctrl_dt: float = 0.02
+    obs_scales: ObsScales = field(default_factory=ObsScales)
+    noise_config: PosForceNoiseConfig = field(default_factory=PosForceNoiseConfig)  # type: ignore[assignment]
+    control_config: PosForceControlConfig = field(default_factory=PosForceControlConfig)  # type: ignore[assignment]
+    commands: PosForceCommandsConfig = field(default_factory=PosForceCommandsConfig)
+    goal_ee: GoalEEConfig = field(default_factory=GoalEEConfig)
+    domain_rand: PosForceDomainRandConfig = field(default_factory=PosForceDomainRandConfig)
+    gait: GaitConfig = field(default_factory=GaitConfig)
+    reward_config: RewardConfig | None = None
+    history: HistoryConfig = field(default_factory=HistoryConfig)
+    reset: ResetConfig = field(default_factory=ResetConfig)
+    sensor: Go2ArmSensor = field(default_factory=Go2ArmSensor)  # type: ignore[assignment]
+
+
+# ── Domain randomization provider ────────────────────────────────────────────
+
+
+class Go2ArmPosForceDRProvider(LocomotionDRProvider):
+    """Reset/interval DR for the pos-force task.
+
+    Velocity commands are sampled into the 15-dim command vector; motor-strength
+    is owned by the env (sampled here and cached) so it can scale the action in
+    the Python PD law and feed the privileged observation. EE goals and history
+    buffers are reset through env hooks.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_body_mass: np.ndarray | None = None,
+        base_geom_friction: np.ndarray | None = None,
+        ground_geom_id: int | None = None,
+    ):
+        self._base_body_mass = base_body_mass
+        self._base_geom_friction = base_geom_friction
+        self._ground_geom_id = ground_geom_id
+
+    def _get_reset_randomization_baselines(
+        self, env: Any
+    ) -> tuple[np.ndarray | None, np.ndarray | None, int | None, np.ndarray | None]:
+        return (self._base_body_mass, self._base_geom_friction, self._ground_geom_id, None)
+
+    def _sample_commands(self, env: Any, num_reset: int) -> np.ndarray:
+        return env._sample_velocity_commands(num_reset)
+
+    def build_reset_plan(self, env: Any, env_ids: np.ndarray) -> ResetPlan:
+        plan = super().build_reset_plan(env, env_ids)
+        env._apply_reset_dofs(plan.qpos, env_ids)
+        env._sample_motor_strength(env_ids)
+        env.reset_ee_goals(env_ids, plan.info_updates["commands"])
+        env._history_obs_buf[env_ids] = 0.0
+        env._history_critic_buf[env_ids] = 0.0
+        env._gait_indices[env_ids] = 0.0
+        return plan
+
+    def _compute_reset_obs(
+        self,
+        env: Any,
+        env_ids: np.ndarray,
+        info_updates: dict[str, Any],
+        linvel: np.ndarray,
+        gyro: np.ndarray,
+        gravity: np.ndarray,
+        dof_pos: np.ndarray,
+        dof_vel: np.ndarray,
+    ) -> dict[str, np.ndarray]:
+        sliced_info: dict[str, Any] = {}
+        for k, v in info_updates.items():
+            if isinstance(v, np.ndarray) and v.ndim >= 1 and v.shape[0] == env._num_envs:
+                sliced_info[k] = v[env_ids]
+            else:
+                sliced_info[k] = v
+        actor_raw, critic_raw = env._compute_raw_obs(sliced_info, env_ids=env_ids)
+        return env._update_history(actor_raw, critic_raw, env_ids=env_ids)
+
+
+# ── Environment ──────────────────────────────────────────────────────────────
+
+
+@registry.env("Go2ArmPosForce", sim_backend="mujoco")
+class Go2ArmPosForceEnv(Go2ArmBaseEnv):
+    _cfg: Go2ArmPosForceCfg
+
+    def __init__(self, cfg: Go2ArmPosForceCfg, num_envs: int = 1, backend_type: str = "mujoco"):
+        if cfg.reward_config is None:
+            raise ValueError("reward_config must be provided via Hydra configuration")
+        if backend_type != "mujoco":
+            raise ValueError(f"Go2ArmPosForce currently supports only mujoco, got {backend_type!r}")
+
+        scene = cfg.scene if cfg.scene is not None else SceneCfg(model_file=cfg.model_file)
+        backend = create_backend(
+            backend_type,
+            scene,
+            num_envs,
+            cfg.sim_dt,
+            base_name=cfg.asset.base_name,
+            push_body_name=cfg.domain_rand.push_body_name,
+            post_step_forward_sensor=cfg.post_step_forward_sensor,
+        )
+        super().__init__(cfg, backend, num_envs)
+        if self._num_action != NUM_ACTIONS:
+            raise ValueError(f"Go2ArmPosForce expects 18 actuators, got {self._num_action}")
+
+        dtype = get_global_dtype()
+        self._np_dtype = dtype
+        self._gravity_sensor = "upvector"
+        self._reward_cfg = cfg.reward_config
+        self._enable_reward_log = True
+
+        # PD law tables (18,).
+        gains = build_go2_arm_position_gains(cfg.control_config)  # type: ignore[arg-type]
+        self._kp = gains["kp"].astype(np.float64)
+        self._kd = gains["kd"].astype(np.float64)
+        self._torque_limits = np.concatenate(
+            [
+                np.full((NUM_LEG,), cfg.control_config.leg_torque_limit, dtype=np.float64),
+                np.asarray(cfg.control_config.arm_torque_limit, dtype=np.float64),
+            ]
+        )
+        self._action_scale = np.concatenate(
+            [
+                np.full((NUM_LEG,), cfg.control_config.action_scale, dtype=dtype),
+                np.full((NUM_ARM,), cfg.control_config.arm_action_scale, dtype=dtype),
+            ]
+        )
+        self._motor_strength = np.ones((num_envs, NUM_ACTIONS), dtype=dtype)
+        self._last_torque = np.zeros((num_envs, NUM_ACTIONS), dtype=dtype)
+        self._motor_targets = np.tile(self.default_angles.astype(dtype), (num_envs, 1))
+        self._backend.set_pre_step_control(self._pre_step_pd_control)
+
+        # Privileged DR readback caches (filled in Phase 2).
+        self._dr_friction = np.zeros((num_envs, 1), dtype=dtype)
+        self._dr_base_mass = np.zeros((num_envs, 1), dtype=dtype)
+        self._dr_base_com = np.zeros((num_envs, 3), dtype=dtype)
+
+        # EE goal buffers.
+        self._init_ee_goal_buffers(num_envs)
+        self._arm_base_offset = np.asarray([0.0045, 0.0, 0.0945], dtype=dtype)
+        self._ee_center_offset = np.asarray(
+            [
+                cfg.goal_ee.sphere_center.x_offset,
+                cfg.goal_ee.sphere_center.y_offset,
+                cfg.goal_ee.sphere_center.z_invariant_offset,
+            ],
+            dtype=dtype,
+        )
+
+        # Gait buffers.
+        self._gait_indices = np.zeros((num_envs,), dtype=dtype)
+        self._ref_dof_pos = np.tile(self.default_angles[:NUM_LEG].astype(dtype), (num_envs, 1))
+        self._stance_mask = np.zeros((num_envs, 4), dtype=dtype)
+
+        # Realized force buffers (world frame); zero until Phase 2.
+        self._force_ee_world = np.zeros((num_envs, 3), dtype=dtype)
+        self._force_base_world = np.zeros((num_envs, 3), dtype=dtype)
+
+        # Command resample timer.
+        self._cmd_resample_steps = max(1, int(cfg.commands.resample_time_s / cfg.ctrl_dt))
+        self._cmd_timer = np.random.randint(
+            0, self._cmd_resample_steps, size=(num_envs,), dtype=np.int32
+        )
+
+        self._commands_scale = self._build_commands_scale()
+        self._init_reward_functions()
+
+        # Single-step obs dims.
+        self._actor_one_step_dim = self._actor_single_obs_dim()
+        self._critic_one_step_dim = self._critic_single_obs_dim()
+        H_a = cfg.history.num_actor_history
+        H_c = cfg.history.num_critic_history
+        self._history_obs_buf = np.zeros((num_envs, H_a * self._actor_one_step_dim), dtype=dtype)
+        self._history_critic_buf = np.zeros(
+            (num_envs, H_c * self._critic_one_step_dim), dtype=dtype
+        )
+
+        base_body_mass = backend.get_body_mass() if cfg.domain_rand.randomize_base_mass else None
+        base_geom_friction = None
+        ground_geom_id = None
+        if cfg.domain_rand.randomize_friction:
+            base_geom_friction = backend.get_geom_friction()
+            ground_geom_id = backend.get_geom_id(cfg.asset.ground)
+        self._init_domain_randomization(
+            Go2ArmPosForceDRProvider(
+                base_body_mass=base_body_mass,
+                base_geom_friction=base_geom_friction,
+                ground_geom_id=ground_geom_id,
+            )
+        )
+
+    # ── obs spec ──────────────────────────────────────────────────────────
+
+    @property
+    def obs_groups_spec(self) -> dict[str, int]:
+        H_a = self._cfg.history.num_actor_history
+        H_c = self._cfg.history.num_critic_history
+        return {
+            "obs": H_a * self._actor_one_step_dim,
+            "critic": H_c * self._critic_one_step_dim,
+        }
+
+    def _actor_single_obs_dim(self) -> int:
+        # body_orient(2) + ang_vel(3) + dof_diff(18) + dof_vel(18)
+        # + last_actions(18) + sin/cos(2) + commands(15)
+        return 2 + 3 + NUM_ACTIONS + NUM_ACTIONS + NUM_ACTIONS + 2 + NUM_COMMANDS
+
+    def _critic_single_obs_dim(self) -> int:
+        # CSE targets front block (12): base_lin_vel(3) + ee_pos_sphere(3)
+        #   + force_ee(3) + force_base(3)
+        # then: leg_ref_diff(12) + dr_block(5) + motor_strength(18)
+        #   + stance(4) + proj_gravity(3) + actor_core(...)
+        cse = 12
+        privileged = NUM_LEG + 5 + NUM_ACTIONS + 4 + 3
+        return cse + privileged + self._actor_single_obs_dim()
+
+    # ── EE goal sampling (UniFP yaw + gravity frame) ──────────────────────
+
+    def _init_ee_goal_buffers(self, num_envs: int) -> None:
+        dtype = get_global_dtype()
+        self._curr_ee_goal_sphere = np.zeros((num_envs, 3), dtype=dtype)
+        self._curr_ee_goal_cart = np.zeros((num_envs, 3), dtype=dtype)
+        self._curr_ee_goal_world = np.zeros((num_envs, 3), dtype=dtype)
+        self._ee_start_sphere = np.zeros((num_envs, 3), dtype=dtype)
+        self._ee_goal_sphere = np.zeros((num_envs, 3), dtype=dtype)
+        self._ee_goal_orn_euler = np.zeros((num_envs, 3), dtype=dtype)
+        self._arm_goal_timer = np.zeros((num_envs,), dtype=np.int32)
+        self._traj_steps = np.ones((num_envs,), dtype=np.int32)
+        self._traj_total_steps = np.ones((num_envs,), dtype=np.int32)
+
+    def get_ee_goal_spherical_center(self) -> np.ndarray:
+        """Sphere center: base XY (yaw frame) + offset, terrain-relative z."""
+        base_pos = self._backend.get_base_pos()
+        base_yaw_quat = np_yaw_quat(self._backend.get_base_quat())
+        center = np.zeros((self._num_envs, 3), dtype=self._np_dtype)
+        center[:, :2] = base_pos[:, :2]
+        center = center + np_quat_apply(base_yaw_quat, np.tile(self._ee_center_offset, (self._num_envs, 1)))
+        return center
+
+    def _collision_check(self, starts: np.ndarray, goals: np.ndarray) -> np.ndarray:
+        cfg = self._cfg.goal_ee
+        n = max(2, cfg.num_collision_check_samples)
+        t = np.linspace(0.0, 1.0, n, dtype=self._np_dtype)
+        path_sphere = starts[:, None, :] + (goals - starts)[:, None, :] * t[None, :, None]
+        path_cart = sphere2cart(path_sphere.reshape(-1, 3)).reshape(len(starts), n, 3)
+        upper = np.asarray(cfg.collision_upper_limits, dtype=self._np_dtype)
+        lower = np.asarray(cfg.collision_lower_limits, dtype=self._np_dtype)
+        inside = np.all(path_cart < upper, axis=2) & np.all(path_cart > lower, axis=2)
+        underground = np.any(path_cart[..., 2] < float(cfg.underground_limit), axis=1)
+        return np.any(inside, axis=1) | underground
+
+    def _resample_ee_goal_sphere(self, env_ids: np.ndarray) -> None:
+        cfg = self._cfg.goal_ee
+        n = len(env_ids)
+        start = self._ee_start_sphere[env_ids]
+        candidates = np.tile(np.asarray(cfg.init_pos_end, dtype=self._np_dtype), (n, 1))
+        remaining = np.arange(n, dtype=np.int32)
+        for _ in range(max(1, cfg.num_resample_attempts)):
+            m = len(remaining)
+            l = np.random.uniform(*cfg.pos_l, size=m).astype(self._np_dtype)
+            p = np.random.uniform(*cfg.pos_p, size=m).astype(self._np_dtype)
+            y = np.random.uniform(*cfg.pos_y, size=m).astype(self._np_dtype)
+            new_goals = np.stack([l, p, y], axis=1)
+            candidates[remaining] = new_goals
+            unsafe = self._collision_check(start[remaining], new_goals)
+            remaining = remaining[unsafe]
+            if len(remaining) == 0:
+                break
+        self._ee_goal_sphere[env_ids] = candidates
+
+    def reset_ee_goals(self, env_ids: np.ndarray, commands: np.ndarray) -> None:
+        """Reset EE goal trajectory: start at init_pos_start, sample an end goal."""
+        env_ids = np.asarray(env_ids, dtype=np.int32).reshape(-1)
+        if len(env_ids) == 0:
+            return
+        cfg = self._cfg.goal_ee
+        self._ee_start_sphere[env_ids] = np.asarray(cfg.init_pos_start, dtype=self._np_dtype)
+        self._curr_ee_goal_sphere[env_ids] = self._ee_start_sphere[env_ids]
+        self._resample_ee_goal_sphere(env_ids)
+        dt = self._cfg.ctrl_dt
+        traj_t = np.random.uniform(*cfg.traj_time, size=len(env_ids))
+        hold_t = np.random.uniform(*cfg.hold_time, size=len(env_ids))
+        traj_s = np.maximum(1, np.round(traj_t / dt).astype(np.int32))
+        hold_s = np.maximum(0, np.round(hold_t / dt).astype(np.int32))
+        self._traj_steps[env_ids] = traj_s
+        self._traj_total_steps[env_ids] = traj_s + hold_s
+        self._arm_goal_timer[env_ids] = 0
+        # Write the starting sphere command into the (sliced) command vector.
+        commands[:, CMD_EE_POS] = self._curr_ee_goal_sphere[env_ids]
+
+    def _update_ee_goal_trajectory(self, commands: np.ndarray) -> None:
+        """Advance the EE goal along start->goal, then resample after the hold."""
+        timer = self._arm_goal_timer
+        traj = self._traj_steps.astype(self._np_dtype)
+        t = np.clip(timer.astype(self._np_dtype) / np.maximum(traj, 1.0), 0.0, 1.0)
+        self._curr_ee_goal_sphere = (
+            self._ee_start_sphere + (self._ee_goal_sphere - self._ee_start_sphere) * t[:, None]
+        )
+        done = timer >= self._traj_total_steps
+        if np.any(done):
+            done_ids = np.flatnonzero(done).astype(np.int32)
+            self._ee_start_sphere[done_ids] = self._ee_goal_sphere[done_ids]
+            self._resample_ee_goal_sphere(done_ids)
+            self._arm_goal_timer[done_ids] = 0
+            dt = self._cfg.ctrl_dt
+            cfg = self._cfg.goal_ee
+            traj_t = np.random.uniform(*cfg.traj_time, size=len(done_ids))
+            hold_t = np.random.uniform(*cfg.hold_time, size=len(done_ids))
+            traj_s = np.maximum(1, np.round(traj_t / dt).astype(np.int32))
+            hold_s = np.maximum(0, np.round(hold_t / dt).astype(np.int32))
+            self._traj_steps[done_ids] = traj_s
+            self._traj_total_steps[done_ids] = traj_s + hold_s
+        self._arm_goal_timer += 1
+        self._curr_ee_goal_cart = sphere2cart(self._curr_ee_goal_sphere)
+        base_yaw_quat = np_yaw_quat(self._backend.get_base_quat())
+        self._curr_ee_goal_world = self.get_ee_goal_spherical_center() + np_quat_apply(
+            base_yaw_quat, self._curr_ee_goal_cart
+        )
+        commands[:, CMD_EE_POS] = self._curr_ee_goal_sphere
+
+    def _ee_pos_sphere_measured(self) -> np.ndarray:
+        """Measured EE position in the yaw+gravity sphere frame (CSE target)."""
+        ee_world = self._ee_world_pos()
+        base_yaw_quat = np_yaw_quat(self._backend.get_base_quat())
+        ee_local = np_quat_apply_inverse(
+            base_yaw_quat, ee_world - self.get_ee_goal_spherical_center()
+        )
+        return cart2sphere(ee_local)
+
+    def _ee_world_pos(self) -> np.ndarray:
+        """End-effector world position from the armbasepoint-relative sensors."""
+        base = self._backend.get_sensor_data("armbasepoint_world_pos")
+        quat = self._backend.get_sensor_data("armbasepoint_world_quat")
+        rel = self._backend.get_sensor_data(self._cfg.sensor.ee_local_pos)
+        return base + np_quat_apply(quat, rel)
+
+    # ── commands ──────────────────────────────────────────────────────────
+
+    def _build_commands_scale(self) -> np.ndarray:
+        s = self._cfg.obs_scales
+        return np.asarray(
+            [
+                s.lin_vel,
+                s.lin_vel,
+                s.ang_vel,
+                s.ee_sphe_radius,
+                s.ee_sphe_pitch,
+                s.ee_sphe_yaw,
+                s.ee_orn,
+                s.ee_orn,
+                s.ee_orn,
+                s.ee_force,
+                s.ee_force,
+                s.ee_force,
+                s.base_force,
+                s.base_force,
+                s.base_force,
+            ],
+            dtype=self._np_dtype,
+        )
+
+    def _sample_velocity_commands(self, num_reset: int) -> np.ndarray:
+        cfg = self._cfg.commands
+        commands = np.zeros((num_reset, NUM_COMMANDS), dtype=self._np_dtype)
+        commands[:, 0] = np.random.uniform(*cfg.lin_vel_x, size=num_reset)
+        commands[:, 1] = np.random.uniform(*cfg.lin_vel_y, size=num_reset)
+        commands[:, 2] = np.random.uniform(*cfg.ang_vel_yaw, size=num_reset)
+        zero_mask = np.random.uniform(size=num_reset) < cfg.zero_vel_cmd_prob
+        commands[zero_mask, 0:3] = 0.0
+        # Deadband small commands to zero for stable standing.
+        small = (
+            (np.abs(commands[:, 0]) < cfg.lin_vel_x_clip)
+            & (np.abs(commands[:, 1]) < cfg.lin_vel_y_clip)
+            & (np.abs(commands[:, 2]) < cfg.ang_vel_yaw_clip)
+        )
+        commands[small, 0:3] = 0.0
+        return commands
+
+    def _command_is_moving(self, commands: np.ndarray) -> np.ndarray:
+        cfg = self._cfg.commands
+        return (
+            (np.abs(commands[:, 0]) > cfg.lin_vel_x_clip)
+            | (np.abs(commands[:, 1]) > cfg.lin_vel_y_clip)
+            | (np.abs(commands[:, 2]) > cfg.ang_vel_yaw_clip)
+        )
+
+    def _resample_commands_if_due(self, info: dict) -> None:
+        self._cmd_timer += 1
+        due = self._cmd_timer >= self._cmd_resample_steps
+        if np.any(due):
+            ids = np.flatnonzero(due).astype(np.int32)
+            new_cmds = self._sample_velocity_commands(len(ids))
+            info["commands"][ids, 0:3] = new_cmds[:, 0:3]
+            self._cmd_timer[ids] = 0
+
+    # ── reset DOFs / motor strength ───────────────────────────────────────
+
+    def _apply_reset_dofs(self, qpos: np.ndarray, env_ids: np.ndarray) -> None:
+        """UniFP-style reset: scale leg dofs, jitter arm dofs around default."""
+        cfg = self._cfg.reset
+        n = len(env_ids)
+        base = 7  # floating base (pos3 + quat4) precedes the joint dofs
+        leg_scale = np.random.uniform(*cfg.leg_pos_scale_range, size=(n, NUM_LEG)).astype(
+            qpos.dtype
+        )
+        qpos[:, base : base + NUM_LEG] = self.default_angles[:NUM_LEG] * leg_scale
+        arm_jitter = np.random.uniform(
+            -cfg.arm_init_dof_pos_range, cfg.arm_init_dof_pos_range, size=(n, NUM_ARM)
+        ).astype(qpos.dtype)
+        qpos[:, base + NUM_LEG : base + NUM_ACTIONS] = (
+            self.default_angles[NUM_LEG:] + arm_jitter
+        )
+
+    def _sample_motor_strength(self, env_ids: np.ndarray) -> None:
+        cfg = self._cfg.domain_rand
+        if not cfg.randomize_motor_strength:
+            return
+        n = len(env_ids)
+        leg = np.random.uniform(*cfg.leg_motor_strength_range, size=(n, NUM_LEG))
+        arm = np.random.uniform(*cfg.arm_motor_strength_range, size=(n, NUM_ARM))
+        self._motor_strength[env_ids] = np.concatenate([leg, arm], axis=1).astype(self._np_dtype)
+
+    # ── control: Python PD via per-substep pre-step hook ──────────────────
+
+    def apply_action(self, actions: np.ndarray, state: NpEnvState) -> np.ndarray:
+        actions = np.asarray(actions, dtype=self._np_dtype)
+        state.info["last_actions"] = state.info.get("current_actions", np.zeros_like(actions))
+        state.info["current_actions"] = actions
+        exec_actions = (
+            state.info["last_actions"]
+            if self._cfg.control_config.simulate_action_latency
+            else actions
+        )
+        # Position targets = default + action * motor_strength * action_scale.
+        self._motor_targets = (
+            self.default_angles + exec_actions * self._motor_strength * self._action_scale
+        ).astype(self._np_dtype)
+        return self._motor_targets
+
+    def _pre_step_pd_control(self, backend: Any, targets: np.ndarray) -> np.ndarray:
+        q = backend.get_dof_pos()
+        qd = backend.get_dof_vel()
+        torque = self._kp * (targets - q) - self._kd * qd
+        torque = np.clip(torque, -self._torque_limits, self._torque_limits)
+        self._last_torque = torque.astype(self._np_dtype)
+        return torque
+
+    # ── gait (UniFP humanoid-gym trot reference) ──────────────────────────
+
+    def _update_gait(self, info: dict) -> None:
+        cfg = self._cfg.gait
+        moving = self._command_is_moving(info["commands"])
+        self._gait_indices = np.remainder(
+            self._gait_indices + self._cfg.ctrl_dt / cfg.cycle_time, 1.0
+        )
+        self._gait_indices[~moving] = 0.0
+        sin_pos = np.sin(2.0 * np.pi * self._gait_indices)
+        thd = cfg.target_joint_pos_thd
+        sin_l = sin_pos + thd
+        sin_r = sin_pos - thd
+        stance = np.zeros((self._num_envs, 4), dtype=self._np_dtype)
+        stance[:, 0] = sin_l >= 0
+        stance[:, 3] = sin_l >= 0
+        stance[:, 1] = sin_r < 0
+        stance[:, 2] = sin_r < 0
+        self._stance_mask = stance
+
+        ref = np.tile(self.default_angles[:NUM_LEG], (self._num_envs, 1)).astype(self._np_dtype)
+        scale_1 = cfg.target_joint_pos_scale / (1.0 - thd)
+        scale_2 = scale_1 * 2.0
+        sl = np.where(sin_l > 0, 0.0, sin_l)
+        sr = np.where(sin_r < 0, 0.0, sin_r)
+        ref[:, 1] -= sl * scale_1
+        ref[:, 2] += sl * scale_2
+        ref[:, 10] -= sl * scale_1
+        ref[:, 11] += sl * scale_2
+        ref[:, 4] += sr * scale_1
+        ref[:, 5] -= sr * scale_2
+        ref[:, 7] += sr * scale_1
+        ref[:, 8] -= sr * scale_2
+        self._ref_dof_pos = ref
+
+    # ── step ──────────────────────────────────────────────────────────────
+
+    def update_state(self, state: NpEnvState) -> NpEnvState:
+        info = state.info
+        self._resample_commands_if_due(info)
+        self._update_gait(info)
+        self._update_ee_goal_trajectory(info["commands"])
+        info["torques"] = self._last_torque
+
+        linvel = self.get_local_linvel()
+        gyro = self.get_gyro()
+        gravity = self._backend.get_sensor_data(self._gravity_sensor)
+        dof_pos = self.get_dof_pos()
+        dof_vel = self.get_dof_vel()
+
+        env_ids = np.arange(self._num_envs, dtype=np.int32)
+        actor_raw, critic_raw = self._compute_raw_obs(info, env_ids=env_ids)
+        obs = self._update_history(actor_raw, critic_raw, env_ids=env_ids)
+        reward = self._compute_reward(info, linvel, gyro, gravity, dof_pos, dof_vel)
+        terminated = self._compute_terminated(gravity)
+        return state.replace(obs=obs, reward=reward, terminated=terminated)
+
+    def _compute_terminated(self, gravity: np.ndarray) -> np.ndarray:
+        # Fall when the projected up-axis tips past horizontal.
+        return gravity[:, 2] <= 0.0
+
+    # ── observations ──────────────────────────────────────────────────────
+
+    def _compute_raw_obs(
+        self, info: dict, env_ids: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return (actor_raw, critic_raw) single-step observations for env_ids."""
+        dtype = self._np_dtype
+        s = self._cfg.obs_scales
+
+        base_quat = self._backend.get_base_quat()[env_ids]
+        base_ang_vel = self._backend.get_base_ang_vel()[env_ids]
+        gravity = self._backend.get_sensor_data(self._gravity_sensor)[env_ids]
+        dof_pos = self.get_dof_pos()[env_ids]
+        dof_vel = self.get_dof_vel()[env_ids]
+        base_lin_vel = self.get_local_linvel()[env_ids]
+        commands = info["commands"]
+        commands = commands if commands.shape[0] == len(env_ids) else commands[env_ids]
+        last_actions = info.get(
+            "current_actions", np.zeros((len(env_ids), NUM_ACTIONS), dtype=dtype)
+        )
+        last_actions = (
+            last_actions if last_actions.shape[0] == len(env_ids) else last_actions[env_ids]
+        )
+
+        body_rp = _roll_pitch_from_quat(base_quat)
+        diff = (dof_pos - self.default_angles) * s.dof_pos
+        dvel = dof_vel * s.dof_vel
+        sin_phase = np.sin(2.0 * np.pi * self._gait_indices[env_ids])[:, None]
+        cos_phase = np.cos(2.0 * np.pi * self._gait_indices[env_ids])[:, None]
+        cmd_scaled = commands * self._commands_scale
+
+        # Noise (actor only).
+        nz = self._cfg.noise_config
+        body_rp_n = self._obs_noise(body_rp, nz.scale_orn)
+        ang_vel_n = self._obs_noise(base_ang_vel, nz.scale_ang_vel)
+        diff_n = self._obs_noise(diff, nz.scale_joint_angle)
+        dvel_n = self._obs_noise(dvel, nz.scale_joint_vel)
+
+        actor_raw = np.concatenate(
+            [
+                body_rp_n,
+                ang_vel_n * s.ang_vel,
+                diff_n,
+                dvel_n,
+                last_actions,
+                sin_phase,
+                cos_phase,
+                cmd_scaled,
+            ],
+            axis=1,
+            dtype=dtype,
+        )
+
+        # CSE estimator targets (front 12 of critic obs).
+        ee_pos_sphere = self._ee_pos_sphere_measured()[env_ids]
+        force_ee_local = np_quat_apply_inverse(
+            np_yaw_quat(base_quat), self._force_ee_world[env_ids]
+        )
+        force_base_local = np_quat_apply_inverse(
+            np_yaw_quat(base_quat), self._force_base_world[env_ids]
+        )
+        ee_sphere_scaled = ee_pos_sphere * np.asarray(
+            [s.ee_sphe_radius, s.ee_sphe_pitch, s.ee_sphe_yaw], dtype=dtype
+        )
+        cse_targets = np.concatenate(
+            [
+                base_lin_vel * s.lin_vel,
+                ee_sphere_scaled,
+                force_ee_local * s.ee_force,
+                force_base_local * s.base_force,
+            ],
+            axis=1,
+            dtype=dtype,
+        )
+
+        leg_ref_diff = dof_pos[:, :NUM_LEG] - self._ref_dof_pos[env_ids]
+        dr_block = np.concatenate(
+            [self._dr_friction[env_ids], self._dr_base_mass[env_ids], self._dr_base_com[env_ids]],
+            axis=1,
+        )
+        motor_strength = self._motor_strength[env_ids] - 1.0
+
+        critic_core = np.concatenate(
+            [
+                body_rp,
+                base_ang_vel * s.ang_vel,
+                diff,
+                dvel,
+                last_actions,
+                sin_phase,
+                cos_phase,
+                cmd_scaled,
+            ],
+            axis=1,
+            dtype=dtype,
+        )
+        critic_raw = np.concatenate(
+            [
+                cse_targets,
+                leg_ref_diff,
+                dr_block,
+                motor_strength,
+                self._stance_mask[env_ids],
+                gravity,
+                critic_core,
+            ],
+            axis=1,
+            dtype=dtype,
+        )
+        return actor_raw, critic_raw
+
+    def _update_history(
+        self, actor_raw: np.ndarray, critic_raw: np.ndarray, env_ids: np.ndarray
+    ) -> dict[str, np.ndarray]:
+        H_a = self._cfg.history.num_actor_history
+        H_c = self._cfg.history.num_critic_history
+        a_dim = self._actor_one_step_dim
+        c_dim = self._critic_one_step_dim
+        buf_a = self._history_obs_buf[env_ids]
+        buf_c = self._history_critic_buf[env_ids]
+        if H_a > 1:
+            buf_a = np.concatenate([buf_a[:, a_dim:], actor_raw], axis=1)
+        else:
+            buf_a = actor_raw
+        if H_c > 1:
+            buf_c = np.concatenate([buf_c[:, c_dim:], critic_raw], axis=1)
+        else:
+            buf_c = critic_raw
+        self._history_obs_buf[env_ids] = buf_a
+        self._history_critic_buf[env_ids] = buf_c
+        return {"obs": buf_a.copy(), "critic": buf_c.copy()}
+
+    # ── rewards ───────────────────────────────────────────────────────────
+
+    def _init_reward_functions(self) -> None:
+        self._reward_fns: dict[str, Any] = {
+            "tracking_lin_vel": self._reward_tracking_lin_vel,
+            "tracking_ang_vel": self._reward_tracking_ang_vel,
+            "lin_vel_z": self._reward_lin_vel_z,
+            "ang_vel_xy": self._reward_ang_vel_xy,
+            "alive": self._reward_alive,
+            "ref_dof_leg": self._reward_ref_dof_leg,
+            "action_rate": self._reward_action_rate,
+            "torques": self._reward_torques,
+            "dof_vel": self._reward_dof_vel,
+            "base_height": self._reward_base_height,
+            "hip_pos": self._reward_hip_pos,
+            "torque_limits": self._reward_torque_limits,
+        }
+
+    def _compute_reward(
+        self,
+        info: dict,
+        linvel: np.ndarray,
+        gyro: np.ndarray,
+        gravity: np.ndarray,
+        dof_pos: np.ndarray,
+        dof_vel: np.ndarray,
+    ) -> np.ndarray:
+        ctx = RewardContext(
+            info=info,
+            linvel=linvel,
+            gyro=gyro,
+            gravity=gravity,
+            dof_pos=dof_pos,
+            dof_vel=dof_vel,
+            num_envs=self._num_envs,
+            default_angles=self.default_angles,
+            tracking_sigma=self._reward_cfg.tracking_sigma,
+            base_height_target=self._reward_cfg.base_height_target,
+            base_height=self._backend.get_base_pos()[:, 2],
+        )
+        reward = np.zeros((self._num_envs,), dtype=self._np_dtype)
+        for name, scale in self._reward_cfg.scales.items():
+            if scale == 0.0 or name not in self._reward_fns:
+                continue
+            reward = reward + self._reward_fns[name](ctx) * scale
+        return reward * self._cfg.ctrl_dt
+
+    def _reward_tracking_lin_vel(self, ctx: RewardContext) -> np.ndarray:
+        err = np.sum(np.square(ctx.info["commands"][:, 0:2] - ctx.linvel[:, 0:2]), axis=1)
+        return np.exp(-err / ctx.tracking_sigma)
+
+    def _reward_tracking_ang_vel(self, ctx: RewardContext) -> np.ndarray:
+        err = np.square(ctx.info["commands"][:, 2] - ctx.gyro[:, 2])
+        return np.exp(-err / ctx.tracking_sigma)
+
+    def _reward_lin_vel_z(self, ctx: RewardContext) -> np.ndarray:
+        return np.square(ctx.linvel[:, 2])
+
+    def _reward_ang_vel_xy(self, ctx: RewardContext) -> np.ndarray:
+        return np.sum(np.square(ctx.gyro[:, 0:2]), axis=1)
+
+    def _reward_alive(self, ctx: RewardContext) -> np.ndarray:
+        return np.ones((ctx.num_envs,), dtype=self._np_dtype)
+
+    def _reward_ref_dof_leg(self, ctx: RewardContext) -> np.ndarray:
+        err = np.sum(np.square(ctx.dof_pos[:, :NUM_LEG] - self._ref_dof_pos), axis=1)
+        return np.exp(-err / self._reward_cfg.sigma_force)
+
+    def _reward_action_rate(self, ctx: RewardContext) -> np.ndarray:
+        cur = ctx.info.get("current_actions")
+        last = ctx.info.get("last_actions")
+        if cur is None or last is None:
+            return np.zeros((ctx.num_envs,), dtype=self._np_dtype)
+        return np.sum(np.square(cur - last), axis=1)
+
+    def _reward_torques(self, ctx: RewardContext) -> np.ndarray:
+        return np.sum(np.square(self._last_torque), axis=1)
+
+    def _reward_dof_vel(self, ctx: RewardContext) -> np.ndarray:
+        return np.sum(np.square(ctx.dof_vel), axis=1)
+
+    def _reward_base_height(self, ctx: RewardContext) -> np.ndarray:
+        return np.square(ctx.base_height - ctx.base_height_target)
+
+    def _reward_hip_pos(self, ctx: RewardContext) -> np.ndarray:
+        hip_idx = np.asarray([0, 3, 6, 9])
+        return np.sum(
+            np.square(ctx.dof_pos[:, hip_idx] - self.default_angles[hip_idx]), axis=1
+        )
+
+    def _reward_torque_limits(self, ctx: RewardContext) -> np.ndarray:
+        margin = self._reward_cfg.soft_torque_limit * self._torque_limits
+        over = np.abs(self._last_torque) - margin
+        return np.sum(np.clip(over, 0.0, None), axis=1)
