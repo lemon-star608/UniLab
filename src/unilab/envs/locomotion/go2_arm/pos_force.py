@@ -97,6 +97,107 @@ def _roll_pitch_from_quat(quat: np.ndarray) -> np.ndarray:
     return np.stack([roll, pitch], axis=1)
 
 
+class _ForceSchedule:
+    """Per-env trapezoidal force episodes (ramp up -> hold -> ramp down).
+
+    Faithful in spirit to UniFP's ``_push_gripper`` / ``_push_robot_base``
+    state machines: each env idles for a random interval, then runs one force
+    episode toward a random target with a symmetric ramp and a hold, then idles
+    again. ``prob`` is the probability that any given episode actually fires;
+    otherwise the force stays zero for that interval (UniFP's ``freed_envs``).
+    The returned force is per-env ``(N, 3)`` in newtons.
+    """
+
+    def __init__(
+        self,
+        num_envs: int,
+        mag_range: tuple[float, float],
+        interval_range: tuple[int, int],
+        duration_range: tuple[int, int],
+        prob: float,
+        dtype: Any,
+    ):
+        self._n = num_envs
+        self._mag = mag_range
+        self._interval = interval_range
+        self._duration = duration_range
+        self._prob = float(prob)
+        self._dtype = dtype
+        self.current = np.zeros((num_envs, 3), dtype=dtype)
+        self._target = np.zeros((num_envs, 3), dtype=dtype)
+        self._active = np.zeros((num_envs,), dtype=bool)
+        self._elapsed = np.zeros((num_envs,), dtype=np.int32)
+        self._ramp = np.ones((num_envs,), dtype=np.int32)
+        self._hold = np.zeros((num_envs,), dtype=np.int32)
+        self._timer = np.zeros((num_envs,), dtype=np.int32)
+        self.reset(np.arange(num_envs, dtype=np.int32))
+
+    def reset(self, env_ids: np.ndarray) -> None:
+        n = len(env_ids)
+        if n == 0:
+            return
+        self.current[env_ids] = 0.0
+        self._target[env_ids] = 0.0
+        self._active[env_ids] = False
+        self._elapsed[env_ids] = 0
+        self._timer[env_ids] = np.random.randint(self._interval[0], self._interval[1] + 1, size=n)
+
+    def _start_episodes(self, env_ids: np.ndarray) -> None:
+        n = len(env_ids)
+        fire = np.random.uniform(size=n) < self._prob
+        fire_ids = env_ids[fire]
+        if len(fire_ids) > 0:
+            mags = np.random.uniform(self._mag[0], self._mag[1], size=(len(fire_ids), 3))
+            self._target[fire_ids] = mags.astype(self._dtype)
+            dur = np.random.randint(self._duration[0], self._duration[1] + 1, size=len(fire_ids))
+            self._ramp[fire_ids] = np.maximum(1, dur // 3)
+            self._hold[fire_ids] = dur - 2 * np.maximum(1, dur // 3)
+            self._elapsed[fire_ids] = 0
+            self._active[fire_ids] = True
+        # Non-firing envs simply re-arm their idle timer.
+        idle_ids = env_ids[~fire]
+        if len(idle_ids) > 0:
+            self._timer[idle_ids] = np.random.randint(
+                self._interval[0], self._interval[1] + 1, size=len(idle_ids)
+            )
+
+    def step(self, enabled: bool) -> np.ndarray:
+        """Advance one control step and return the current force ``(N, 3)``."""
+        if not enabled:
+            self.current[:] = 0.0
+            return self.current
+        # Idle envs: count down; start an episode when the timer elapses.
+        idle = ~self._active
+        self._timer[idle] -= 1
+        due = idle & (self._timer <= 0)
+        if np.any(due):
+            self._start_episodes(np.flatnonzero(due).astype(np.int32))
+        # Active envs: evaluate the trapezoidal profile.
+        active_ids = np.flatnonzero(self._active).astype(np.int32)
+        if len(active_ids) > 0:
+            e = self._elapsed[active_ids].astype(self._dtype)
+            ramp = self._ramp[active_ids].astype(self._dtype)
+            hold = self._hold[active_ids].astype(self._dtype)
+            total = 2.0 * ramp + hold
+            frac = np.ones_like(e)
+            up = e < ramp
+            frac[up] = e[up] / ramp[up]
+            down = e >= (ramp + hold)
+            frac[down] = np.clip((total[down] - e[down]) / ramp[down], 0.0, 1.0)
+            self.current[active_ids] = self._target[active_ids] * frac[:, None]
+            self._elapsed[active_ids] += 1
+            done = self._elapsed[active_ids] >= total.astype(np.int32)
+            if np.any(done):
+                done_ids = active_ids[done]
+                self._active[done_ids] = False
+                self.current[done_ids] = 0.0
+                self._target[done_ids] = 0.0
+                self._timer[done_ids] = np.random.randint(
+                    self._interval[0], self._interval[1] + 1, size=len(done_ids)
+                )
+        return self.current
+
+
 # ── Configuration dataclasses ────────────────────────────────────────────────
 
 
@@ -165,11 +266,26 @@ class PosForceCommandsConfig:
     ang_vel_yaw_clip: float = 0.2
     zero_vel_cmd_prob: float = 0.3
     resample_time_s: float = 5.0
-    # Force command magnitudes (N). Used by the Phase 2 push controller.
-    max_push_force_xyz_gripper: list[float] = field(default_factory=lambda: [-18.0, 18.0])
-    max_push_force_xyz_base: list[float] = field(default_factory=lambda: [-25.0, 25.0])
+    # Force command magnitudes (N). cmd = commanded force the policy must exert
+    # (drives the EE/base setpoint offset); ext = external disturbance force
+    # applied to the body (becomes the realized force in the observation).
+    max_push_force_xyz_gripper_cmd: list[float] = field(default_factory=lambda: [-18.0, 18.0])
+    max_push_force_xyz_gripper_ext: list[float] = field(default_factory=lambda: [-15.0, 15.0])
+    max_push_force_xyz_base_cmd: list[float] = field(default_factory=lambda: [-25.0, 25.0])
+    max_push_force_xyz_base_ext: list[float] = field(default_factory=lambda: [-20.0, 20.0])
+    # Force-episode timing in seconds [min, max]: idle interval and active duration.
+    push_gripper_interval_s: list[float] = field(default_factory=lambda: [5.0, 10.0])
+    push_gripper_duration_s: list[float] = field(default_factory=lambda: [0.5, 1.5])
+    push_base_interval_s: list[float] = field(default_factory=lambda: [6.0, 12.0])
+    push_base_duration_s: list[float] = field(default_factory=lambda: [0.5, 1.5])
+    gripper_forced_prob_cmd: float = 0.4
+    gripper_forced_prob_ext: float = 0.3
+    base_forced_prob_cmd: float = 0.4
+    base_forced_prob_ext: float = 0.3
+    # Force/compliance stiffness used to offset the EE position / base velocity
+    # setpoint: ee_goal += F/gripper_force_kp, base_vel_cmd += F/base_force_kd.
     gripper_force_kp: float = 200.0
-    base_force_kp: float = 200.0
+    base_force_kd: float = 200.0
     # Force curriculum: external forces start after this many control steps.
     force_start_step: int = 6000
 
@@ -221,6 +337,7 @@ class GaitConfig:
 class RewardConfig:
     scales: dict[str, float]
     tracking_sigma: float = 0.25
+    tracking_ee_sigma: float = 1.0
     base_height_target: float = 0.40
     soft_dof_pos_limit: float = 0.8
     soft_torque_limit: float = 0.9
@@ -297,7 +414,9 @@ class Go2ArmPosForceDRProvider(LocomotionDRProvider):
         plan = super().build_reset_plan(env, env_ids)
         env._apply_reset_dofs(plan.qpos, env_ids)
         env._sample_motor_strength(env_ids)
+        env._cache_reset_dr(env_ids, plan.randomization)
         env.reset_ee_goals(env_ids, plan.info_updates["commands"])
+        env._reset_force_schedules(env_ids)
         env._history_obs_buf[env_ids] = 0.0
         env._history_critic_buf[env_ids] = 0.0
         env._gait_indices[env_ids] = 0.0
@@ -400,9 +519,46 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         self._ref_dof_pos = np.tile(self.default_angles[:NUM_LEG].astype(dtype), (num_envs, 1))
         self._stance_mask = np.zeros((num_envs, 4), dtype=dtype)
 
-        # Realized force buffers (world frame); zero until Phase 2.
+        # Force application bodies (resolved once, cold path).
+        self._ee_body_id = int(self._backend.get_body_ids([cfg.asset.ee_body_name])[0])
+        self._base_body_id = int(self._backend.get_body_ids([cfg.asset.base_name])[0])
+        self._force_body_ids = np.asarray([self._ee_body_id, self._base_body_id], dtype=np.int32)
+        self._gripper_force_kp = float(cfg.commands.gripper_force_kp)
+        self._base_force_kd = float(cfg.commands.base_force_kd)
+        self._force_start_step = int(cfg.commands.force_start_step)
+
+        # Realized external force buffers (world frame) and commanded forces.
         self._force_ee_world = np.zeros((num_envs, 3), dtype=dtype)
         self._force_base_world = np.zeros((num_envs, 3), dtype=dtype)
+        self._force_ee_cmd = np.zeros((num_envs, 3), dtype=dtype)  # yaw-local frame
+        self._force_base_cmd = np.zeros((num_envs, 3), dtype=dtype)  # yaw-local frame
+
+        ctrl_dt = cfg.ctrl_dt
+        cmds = cfg.commands
+
+        def _steps(seconds: list[float]) -> tuple[int, int]:
+            return (max(1, int(seconds[0] / ctrl_dt)), max(1, int(seconds[1] / ctrl_dt)))
+
+        g_int = _steps(cmds.push_gripper_interval_s)
+        g_dur = _steps(cmds.push_gripper_duration_s)
+        b_int = _steps(cmds.push_base_interval_s)
+        b_dur = _steps(cmds.push_base_duration_s)
+        self._sched_gripper_cmd = _ForceSchedule(
+            num_envs, tuple(cmds.max_push_force_xyz_gripper_cmd), g_int, g_dur,
+            cmds.gripper_forced_prob_cmd, dtype,
+        )
+        self._sched_gripper_ext = _ForceSchedule(
+            num_envs, tuple(cmds.max_push_force_xyz_gripper_ext), g_int, g_dur,
+            cmds.gripper_forced_prob_ext, dtype,
+        )
+        self._sched_base_cmd = _ForceSchedule(
+            num_envs, tuple(cmds.max_push_force_xyz_base_cmd), b_int, b_dur,
+            cmds.base_forced_prob_cmd, dtype,
+        )
+        self._sched_base_ext = _ForceSchedule(
+            num_envs, tuple(cmds.max_push_force_xyz_base_ext), b_int, b_dur,
+            cmds.base_forced_prob_ext, dtype,
+        )
 
         # Command resample timer.
         self._cmd_resample_steps = max(1, int(cfg.commands.resample_time_s / cfg.ctrl_dt))
@@ -668,6 +824,22 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         arm = np.random.uniform(*cfg.arm_motor_strength_range, size=(n, NUM_ARM))
         self._motor_strength[env_ids] = np.concatenate([leg, arm], axis=1).astype(self._np_dtype)
 
+    def _cache_reset_dr(self, env_ids: np.ndarray, randomization: Any) -> None:
+        """Cache realized reset DR values for the privileged observation."""
+        if randomization is None:
+            return
+        mass = getattr(randomization, "base_mass_delta", None)
+        if mass is not None:
+            self._dr_base_mass[env_ids] = np.asarray(mass, dtype=self._np_dtype).reshape(-1, 1)
+        com = getattr(randomization, "base_com_offset", None)
+        if com is not None:
+            self._dr_base_com[env_ids] = np.asarray(com, dtype=self._np_dtype).reshape(-1, 3)
+        friction = getattr(randomization, "geom_friction", None)
+        if friction is not None:
+            fr = np.asarray(friction, dtype=self._np_dtype)
+            # Representative scalar: tangential friction of the first geom.
+            self._dr_friction[env_ids] = fr[:, 0, 0:1]
+
     # ── control: Python PD via per-substep pre-step hook ──────────────────
 
     def apply_action(self, actions: np.ndarray, state: NpEnvState) -> np.ndarray:
@@ -679,11 +851,48 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
             if self._cfg.control_config.simulate_action_latency
             else actions
         )
+        self._update_forces(state)
         # Position targets = default + action * motor_strength * action_scale.
         self._motor_targets = (
             self.default_angles + exec_actions * self._motor_strength * self._action_scale
         ).astype(self._np_dtype)
         return self._motor_targets
+
+    def _update_forces(self, state: NpEnvState) -> None:
+        """Advance the force episodes and stage external forces for this step.
+
+        cmd forces are commanded (written into the command vector, yaw-local
+        frame); ext forces are external disturbances applied to the EE and base
+        bodies via the backend (world frame) and become the realized force in
+        the observation.
+        """
+        enabled = self.step_counter >= self._force_start_step
+        self._force_ee_cmd = self._sched_gripper_cmd.step(enabled)
+        self._force_ee_world = self._sched_gripper_ext.step(enabled)
+        self._force_base_cmd = self._sched_base_cmd.step(enabled)
+        self._force_base_world = self._sched_base_ext.step(enabled)
+
+        commands = state.info.get("commands")
+        if commands is not None and commands.shape[0] == self._num_envs:
+            commands[:, CMD_EE_FORCE] = self._force_ee_cmd
+            commands[:, CMD_BASE_FORCE] = self._force_base_cmd
+
+        applied = np.stack([self._force_ee_world, self._force_base_world], axis=1)
+        if enabled and np.any(applied):
+            self._backend.apply_body_force(self._force_body_ids, applied.astype(np.float64))
+
+    def _reset_force_schedules(self, env_ids: np.ndarray) -> None:
+        for sched in (
+            self._sched_gripper_cmd,
+            self._sched_gripper_ext,
+            self._sched_base_cmd,
+            self._sched_base_ext,
+        ):
+            sched.reset(env_ids)
+        self._force_ee_world[env_ids] = 0.0
+        self._force_base_world[env_ids] = 0.0
+        self._force_ee_cmd[env_ids] = 0.0
+        self._force_base_cmd[env_ids] = 0.0
 
     def _pre_step_pd_control(self, backend: Any, targets: np.ndarray) -> np.ndarray:
         q = backend.get_dof_pos()
@@ -891,6 +1100,8 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
     def _init_reward_functions(self) -> None:
         self._reward_fns: dict[str, Any] = {
             "tracking_lin_vel": self._reward_tracking_lin_vel,
+            "tracking_lin_vel_force_world": self._reward_tracking_lin_vel_force_world,
+            "tracking_ee_force_world": self._reward_tracking_ee_force_world,
             "tracking_ang_vel": self._reward_tracking_ang_vel,
             "lin_vel_z": self._reward_lin_vel_z,
             "ang_vel_xy": self._reward_ang_vel_xy,
@@ -940,6 +1151,43 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
     def _reward_tracking_ang_vel(self, ctx: RewardContext) -> np.ndarray:
         err = np.square(ctx.info["commands"][:, 2] - ctx.gyro[:, 2])
         return np.exp(-err / ctx.tracking_sigma)
+
+    def _reward_tracking_ee_force_world(self, ctx: RewardContext) -> np.ndarray:
+        """EE force tracking: reward the EE at the force-offset goal.
+
+        Under EE stiffness ``gripper_force_kp`` the end-effector settles at
+        ``goal + (ext + cmd) / kp``; rewarding that offset position teaches the
+        policy to comply with the external force and exert the commanded force.
+        """
+        base_yaw_quat = np_yaw_quat(self._backend.get_base_quat())
+        force_cmd_world = np_quat_apply(base_yaw_quat, self._force_ee_cmd)
+        forces_offset = self._force_ee_world + force_cmd_world
+        goal_offset = forces_offset / self._gripper_force_kp + self._curr_ee_goal_world
+        ee_world = self._ee_world_pos()
+        ee_pos_error = np.sum(np.abs(ee_world - goal_offset), axis=1)
+        return np.exp(-ee_pos_error / self._reward_cfg.tracking_ee_sigma * 2.0)
+
+    def _reward_tracking_lin_vel_force_world(self, ctx: RewardContext) -> np.ndarray:
+        """Base velocity tracking with a force-induced setpoint offset.
+
+        Under base damping ``base_force_kd`` the base settles at
+        ``cmd_vel + (ext + cmd) / kd``; tracking that offset velocity teaches
+        compliance with / production of base force.
+        """
+        base_yaw_quat = np_yaw_quat(self._backend.get_base_quat())
+        force_base_local = np_quat_apply_inverse(base_yaw_quat, self._force_base_world)
+        forces_offset = force_base_local + self._force_base_cmd
+        vel_cmd = ctx.info["commands"][:, 0:2]
+        base_vel_offset = forces_offset[:, 0:2] / self._base_force_kd + vel_cmd
+        cfg = self._cfg.commands
+        moving = (
+            (np.abs(base_vel_offset[:, 0]) > cfg.lin_vel_x_clip)
+            | (np.abs(base_vel_offset[:, 1]) > cfg.lin_vel_y_clip)
+            | (np.abs(ctx.info["commands"][:, 2]) > cfg.ang_vel_yaw_clip)
+        )
+        base_vel_offset = base_vel_offset * moving[:, None]
+        lin_err = np.sum(np.square(base_vel_offset - ctx.linvel[:, 0:2]), axis=1)
+        return np.exp(-lin_err / ctx.tracking_sigma)
 
     def _reward_lin_vel_z(self, ctx: RewardContext) -> np.ndarray:
         return np.square(ctx.linvel[:, 2])
