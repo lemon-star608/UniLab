@@ -226,7 +226,7 @@ class ObsScales:
 
 @dataclass
 class PosForceNoiseConfig:
-    level: float = 0.0
+    level: float = 1.0  # UniFP add_noise=True, noise_level=1.0 (was 0.0 -> perfect obs)
     scale_joint_angle: float = 0.03
     scale_joint_vel: float = 0.5
     scale_gyro: float = 0.2
@@ -325,12 +325,17 @@ class PosForceControlConfig:
 
 @dataclass
 class PosForceDomainRandConfig:
-    randomize_friction: bool = True
-    friction_range: list[float] = field(default_factory=lambda: [0.5, 1.8])
+    # Field names MUST match the shared DR applier contract in unilab.dr.dr_utils
+    # (it reads them via getattr; UniFP-style names silently no-op).
+    randomize_ground_friction: bool = True
+    # Multiplier on the model's default ground friction (default ~1.0 => ~[0.5, 1.8]).
+    ground_friction_multiplier_range: list[float] = field(default_factory=lambda: [0.5, 1.8])
     randomize_base_mass: bool = True
     added_mass_range: list[float] = field(default_factory=lambda: [0.0, 4.0])
-    randomize_base_com: bool = True
-    added_com_range: list[float] = field(default_factory=lambda: [-0.05, 0.05])
+    random_com: bool = True
+    com_offset_x: list[float] = field(default_factory=lambda: [-0.05, 0.05])
+    com_offset_y: list[float] = field(default_factory=lambda: [-0.05, 0.05])
+    com_offset_z: list[float] = field(default_factory=lambda: [-0.05, 0.05])
     randomize_motor_strength: bool = True
     leg_motor_strength_range: list[float] = field(default_factory=lambda: [0.85, 1.15])
     arm_motor_strength_range: list[float] = field(default_factory=lambda: [0.85, 1.15])
@@ -661,9 +666,12 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         base_body_mass = backend.get_body_mass() if cfg.domain_rand.randomize_base_mass else None
         base_geom_friction = None
         ground_geom_id = None
-        if cfg.domain_rand.randomize_friction:
+        if cfg.domain_rand.randomize_ground_friction:
             base_geom_friction = backend.get_geom_friction()
             ground_geom_id = backend.get_geom_id(cfg.asset.ground)
+        # Remember the ground geom so the friction privileged readback reads the
+        # geom that is actually randomized (not geom 0, a robot geom).
+        self._ground_geom_id = ground_geom_id
         self._init_domain_randomization(
             Go2ArmPosForceDRProvider(
                 base_body_mass=base_body_mass,
@@ -947,8 +955,9 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         friction = getattr(randomization, "geom_friction", None)
         if friction is not None:
             fr = np.asarray(friction, dtype=self._np_dtype)
-            # Representative scalar: tangential friction of the first geom.
-            self._dr_friction[env_ids] = fr[:, 0, 0:1]
+            # Tangential friction of the ground geom (the one we randomize).
+            gid = self._ground_geom_id if self._ground_geom_id is not None else 0
+            self._dr_friction[env_ids] = fr[:, gid, 0:1]
 
     # ── control: Python PD via per-substep pre-step hook ──────────────────
 

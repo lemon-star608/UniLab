@@ -5,6 +5,7 @@ training:
 algo:
   num_envs: 2048
   max_iterations: 8000
+  
   num_one_step_obs: 76          # actor single-step obs dim
   num_actor_history: 32         # must match env.history.num_actor_history
   num_critic_history: 3
@@ -17,7 +18,7 @@ algo:
     num_learning_epochs: 3      # ① fewer epochs/rollout -> smaller KL, steadier LR
   estimator:
     target_start: 0             # CSE targets at the front of the 1-step critic obs
-    learning_rate: 1.0e-5       # fixed, decoupled from the adaptive policy LR (UniFP)
+    learning_rate: 1.0e-4       # ② raised from UniFP 1e-5: sparse/short force training needs faster estimator learning
     latent_dim: 64              # history(32) x 2, matching UniFP's encoder latent
     enc_hidden_dims: [512, 256, 128]
     dec_hidden_dims: [128, 64]
@@ -70,17 +71,29 @@ env:
   history:
     num_actor_history: 32
     num_critic_history: 3   # functional value: critic stacks 3 privileged frames
+  goal_ee:
+    # First EE target ~= the reset arm pose's EE (mean over jitter), removing the
+    # systematic outward jump at episode start (reset EE ~ [0.24, 33deg, 0]).
+    init_pos_start: [0.24, 0.6, 0.0]
+    # Cap reach at ~0.5m: keep the arm in its dexterous/strong mid-range for force
+    # control (0.6 pushed it to ~90% extension -> weak force authority).
+    pos_l: [0.25, 0.5]
   control_config:
     action_delay_steps: 3
   commands:
-    force_start_step: 96000   # control steps = 5000 iters x 24 steps/iter (forces on at ~iter 5000)
+    force_start_step: 36000    # ③ control steps = 1500 iters x 24 (forces on at ~iter 1500)
     zero_vel_cmd_prob_after_force: 0.8
-    force_z_base_ext_scale: 0.05
+    force_z_base_ext_scale: 0.2   # ④ was 0.05; train vertical base disturbance rejection
+    # ① denser ext force events -> more estimator signal + more disturbance practice
+    gripper_forced_prob_ext: 0.5
+    base_forced_prob_ext: 0.5
+    push_gripper_interval_s: [3.0, 6.0]
+    push_base_interval_s: [4.0, 8.0]
   domain_rand:
     push_robots: true
     push_interval: 400
     max_force: [0.3, 0.3, 0.0]
     randomize_gripper_mass: true
     gripper_added_mass_range: [0.0, 0.12]
-    # friction_range left at the UniFP-aligned default [0.5, 1.8]; foot sliding
-    # is handled by the feet_drag penalty, not by shrinking the friction DR.
+    # ground friction / base COM DR now use the dr_utils contract field names
+    # (randomize_ground_friction / random_com); ranges kept at UniFP defaults.
