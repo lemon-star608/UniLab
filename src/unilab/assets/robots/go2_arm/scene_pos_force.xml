@@ -30,6 +30,12 @@
     <contact name="RL_foot_contact" geom1="floor" geom2="RL" data="found" num="1" reduce="mindist"/>
     <contact name="RR_foot_contact" geom1="floor" geom2="RR" data="found" num="1" reduce="mindist"/>
 
+    <!-- Foot contact force vectors (UniFP feet_contact_forces / feet_drag rewards). -->
+    <contact name="FL_foot_force" geom1="floor" geom2="FL" data="force" num="1" reduce="mindist"/>
+    <contact name="FR_foot_force" geom1="floor" geom2="FR" data="force" num="1" reduce="mindist"/>
+    <contact name="RL_foot_force" geom1="floor" geom2="RL" data="force" num="1" reduce="mindist"/>
+    <contact name="RR_foot_force" geom1="floor" geom2="RR" data="force" num="1" reduce="mindist"/>
+
     <contact name="base1_contact" geom1="floor" geom2="base1" data="found" num="1" reduce="mindist"/>
     <contact name="base2_contact" geom1="floor" geom2="base2" data="found" num="1" reduce="mindist"/>
     <contact name="base3_contact" geom1="floor" geom2="base3" data="found" num="1" reduce="mindist"/>

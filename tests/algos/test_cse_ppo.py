@@ -82,3 +82,30 @@ def test_estimator_target_slice_validation():
     too_small = torch.zeros(4, 8)
     with pytest.raises(ValueError):
         est.update(torch.zeros(4, 4 * 10), too_small)
+
+
+def test_estimator_default_lr_is_fixed_when_not_overridden():
+    """The estimator keeps its own fixed LR (UniFP 1e-5) unless lr is passed."""
+    est = CSEEstimator(temporal_steps=4, num_one_step_obs=10, num_pred=12, target_start=0)
+    assert est.learning_rate == pytest.approx(1e-5)
+    est.update(torch.zeros(8, 4 * 10), torch.randn(8, 12))  # no lr override
+    assert est.optimizer.param_groups[0]["lr"] == pytest.approx(1e-5)
+
+
+def test_actor_input_width_matches_task_architecture():
+    """Task config uses latent_dim=64 (history x 2); actor input = one_step + latent."""
+    ac = CSEActorCritic(
+        num_actor_obs=32 * 76,
+        num_critic_obs=138,
+        num_one_step_obs=76,
+        num_actions=18,
+        estimator={
+            "latent_dim": 64,
+            "num_pred": 12,
+            "enc_hidden_dims": [512, 256, 128],
+            "dec_hidden_dims": [128, 64],
+            "target_start": 0,
+        },
+    )
+    assert ac.estimator.num_latent == 64
+    assert ac.actor[0].in_features == 76 + 64

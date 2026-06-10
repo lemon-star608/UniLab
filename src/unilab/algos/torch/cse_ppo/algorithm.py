@@ -102,11 +102,12 @@ class CSEPPO:
         dones: torch.Tensor,
         extras: dict[str, torch.Tensor | TensorDict],
     ) -> None:
-        next_critic_obs = _critic_obs(next_obs).to(self.device).clone().detach()
-        self.transition.next_critic_observations = next_critic_obs
+        del next_obs
         self.transition.rewards = rewards.clone()
         self.transition.dones = dones
 
+        # Timeout (time-limit) bootstrap correction on the reward. The estimator
+        # uses the same-step privileged target, so no next-obs buffer is needed.
         timeouts = extras.get("time_outs")
         timeout_bootstrap_obs = extras.get("time_out_bootstrap_obs")
         if isinstance(timeouts, torch.Tensor):
@@ -122,10 +123,6 @@ class CSEPPO:
                 if self.transition.rewards.ndim == 2 and self.transition.rewards.shape[-1] == 1:
                     correction = correction.unsqueeze(1)
                 self.transition.rewards += correction
-
-                patched_next_critic_obs = self.transition.next_critic_observations.clone()
-                patched_next_critic_obs[timeout_bool] = bootstrap_critic_obs[timeout_bool].detach()
-                self.transition.next_critic_observations = patched_next_critic_obs
             else:
                 transition_values = self.transition.values
                 assert transition_values is not None
@@ -161,7 +158,6 @@ class CSEPPO:
             obs_batch,
             critic_obs_batch,
             actions_batch,
-            next_critic_obs_batch,
             target_values_batch,
             advantages_batch,
             returns_batch,
@@ -193,11 +189,11 @@ class CSEPPO:
                     for param_group in self.optimizer.param_groups:
                         param_group["lr"] = self.learning_rate
 
-            # Concurrent state-estimator update (own optimizer).
+            # Concurrent state-estimator update (own optimizer, fixed LR). The
+            # target is the same-step privileged block of critic_obs_batch.
             estimation_loss = self.actor_critic.estimator.update(
                 obs_batch,
-                next_critic_obs_batch,
-                lr=self.learning_rate,
+                critic_obs_batch,
             )
 
             ratio = torch.exp(actions_log_prob_batch - torch.squeeze(old_actions_log_prob_batch))

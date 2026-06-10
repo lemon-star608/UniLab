@@ -105,10 +105,11 @@ class CSEOnPolicyRunner:
         self.alg.train_mode()
         start_iter = self.current_learning_iteration
         tot_iter = start_iter + num_learning_iterations
-        start_time = time.time()
+        wall_start = time.time()
 
         for it in range(start_iter, tot_iter):
             infos: dict[str, Any] = {}
+            collect_start = time.time()
             with torch.inference_mode():
                 for _ in range(self.num_steps_per_env):
                     actions = self.alg.act(obs, critic_obs)
@@ -131,23 +132,49 @@ class CSEOnPolicyRunner:
                     critic_obs = next_critic_obs
 
                 self.alg.compute_returns(critic_obs)
+            collection_time = time.time() - collect_start
 
+            learn_start = time.time()
             value_loss, surrogate_loss, estimation_loss = self.alg.update()
+            learn_time = time.time() - learn_start
 
             self.current_learning_iteration = it + 1
-            self.logger.tot_timesteps += self.num_steps_per_env * self.env.num_envs
+            num_steps = self.num_steps_per_env * self.env.num_envs
+            self.logger.tot_timesteps += num_steps
+            iter_time = collection_time + learn_time
+            fps = int(num_steps / iter_time) if iter_time > 0 else 0
+            mean_std = float(self.actor_critic.std.mean().detach())
+            stats = {
+                "value_loss": value_loss,
+                "surrogate_loss": surrogate_loss,
+                "estimation_loss": estimation_loss,
+                "learning_rate": float(self.alg.learning_rate),
+                "mean_noise_std": mean_std,
+                "fps": fps,
+                "collection_time": collection_time,
+                "learn_time": learn_time,
+            }
 
-            elapsed = time.time() - start_time
-            self._print_iter(
-                it + 1, tot_iter, value_loss, surrogate_loss, estimation_loss, elapsed, infos
-            )
+            self._print_iter(it + 1, tot_iter, stats, time.time() - wall_start, infos)
             if self._writer is not None:
-                global_step = self.current_learning_iteration
-                self._writer.add_scalar("train/value_loss", value_loss, global_step)
-                self._writer.add_scalar("train/surrogate_loss", surrogate_loss, global_step)
-                self._writer.add_scalar("train/estimation_loss", estimation_loss, global_step)
+                step = self.current_learning_iteration
+                self._writer.add_scalar("Loss/value", value_loss, step)
+                self._writer.add_scalar("Loss/surrogate", surrogate_loss, step)
+                self._writer.add_scalar("Loss/estimation", estimation_loss, step)
+                self._writer.add_scalar("Loss/learning_rate", float(self.alg.learning_rate), step)
+                self._writer.add_scalar("Policy/mean_noise_std", mean_std, step)
+                self._writer.add_scalar("Perf/total_fps", fps, step)
+                self._writer.add_scalar("Perf/collection_time", collection_time, step)
+                self._writer.add_scalar("Perf/learning_time", learn_time, step)
+                self._writer.add_scalar("Perf/total_timesteps", self.logger.tot_timesteps, step)
+                if self.logger.rewbuffer:
+                    mean_rew = sum(self.logger.rewbuffer) / len(self.logger.rewbuffer)
+                    mean_len = sum(self.logger.lenbuffer) / len(self.logger.lenbuffer)
+                    self._writer.add_scalar("Train/mean_reward", mean_rew, step)
+                    self._writer.add_scalar("Train/mean_episode_length", mean_len, step)
+                    self._writer.add_scalar("Train/mean_reward_per_step", mean_rew, self.logger.tot_timesteps)
                 for k, v in (infos.get("log") or {}).items():
-                    self._writer.add_scalar(k, v, global_step)
+                    self._writer.add_scalar(k, v, step)
 
             if (
                 self.log_dir is not None
@@ -197,7 +224,8 @@ class CSEOnPolicyRunner:
 
             def forward(self, obs_history: torch.Tensor) -> torch.Tensor:
                 latent = self.estimator.get_latent(obs_history)
-                actor_input = torch.cat((obs_history[:, :num_one_step_obs], latent), dim=-1)
+                # Current single-step obs is the newest (last) frame; see _actor_input.
+                actor_input = torch.cat((obs_history[:, -num_one_step_obs:], latent), dim=-1)
                 return self.actor_mlp(actor_input)
 
         model = _PolicyExport().eval()
@@ -214,9 +242,7 @@ class CSEOnPolicyRunner:
         self,
         it: int,
         tot: int,
-        value_loss: float,
-        surrogate_loss: float,
-        estimation_loss: float,
+        stats: dict[str, float],
         elapsed: float,
         infos: dict,
     ) -> None:
@@ -236,15 +262,21 @@ class CSEOnPolicyRunner:
         eta_str = time.strftime("%H:%M:%S", time.gmtime(eta))
         print(sep)
         print(f"{'Iteration':>40}: {it}/{tot}")
-        print(f"{'Mean value loss':>40}: {value_loss:.4f}")
-        print(f"{'Mean surrogate loss':>40}: {surrogate_loss:.4f}")
-        print(f"{'Mean estimation loss':>40}: {estimation_loss:.4f}")
+        print(f"{'Computation (fps)':>40}: {int(stats['fps'])} steps/s")
+        print(f"{'Mean value loss':>40}: {stats['value_loss']:.4f}")
+        print(f"{'Mean surrogate loss':>40}: {stats['surrogate_loss']:.4f}")
+        print(f"{'Mean estimation loss':>40}: {stats['estimation_loss']:.4f}")
+        print(f"{'Learning rate':>40}: {stats['learning_rate']:.2e}")
+        print(f"{'Mean action noise std':>40}: {stats['mean_noise_std']:.3f}")
         if mean_rew:
             print(f"{'Mean episode reward':>40}: {mean_rew:.4f}")
         if mean_len:
             print(f"{'Mean episode length':>40}: {mean_len:.1f}")
-        for k, v in (infos.get("log") or {}).items():
+        # Per-term reward means and any other env scalars (reward/*, etc.).
+        for k, v in sorted((infos.get("log") or {}).items()):
             print(f"{k:>40}: {v:.4f}")
+        print(f"{'Total timesteps':>40}: {self.logger.tot_timesteps}")
+        print(f"{'Iteration time':>40}: {stats['collection_time'] + stats['learn_time']:.2f}s")
         print(f"{'Time elapsed':>40}: {time_str}")
         print(f"{'ETA':>40}: {eta_str}")
         print(sep)

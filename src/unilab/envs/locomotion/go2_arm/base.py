@@ -106,6 +106,42 @@ class Go2ArmSensor(Sensor):
         ]
     )
     feet_pos: list[str] = field(default_factory=lambda: ["FL_pos", "FR_pos", "RL_pos", "RR_pos"])
+    # Foot contact-force vectors (3-dim each), foot world velocities, and thigh
+    # world positions — used by the UniFP pos-force feet rewards.
+    feet_force_vec: list[str] = field(
+        default_factory=lambda: ["FL_foot_force", "FR_foot_force", "RL_foot_force", "RR_foot_force"]
+    )
+    feet_vel: list[str] = field(
+        default_factory=lambda: [
+            "FL_global_linvel",
+            "FR_global_linvel",
+            "RL_global_linvel",
+            "RR_global_linvel",
+        ]
+    )
+    thigh_pos: list[str] = field(
+        default_factory=lambda: ["FL_thigh_pos", "FR_thigh_pos", "RL_thigh_pos", "RR_thigh_pos"]
+    )
+    # Penalised-contact sensors for the collision reward (thigh + calf + base).
+    undesired_contact: list[str] = field(
+        default_factory=lambda: [
+            "FL_thigh_contact",
+            "FR_thigh_contact",
+            "RL_thigh_contact",
+            "RR_thigh_contact",
+            "FL_calf_contact1",
+            "FR_calf_contact1",
+            "RL_calf_contact1",
+            "RR_calf_contact1",
+            "FL_calf_contact2",
+            "FR_calf_contact2",
+            "RL_calf_contact2",
+            "RR_calf_contact2",
+            "base1_contact",
+            "base2_contact",
+            "base3_contact",
+        ]
+    )
     ee_local_pos: str = "endpoint_pos"
     ee_local_quat: str = "endpoint_quat"
     ee_local_vel: str = "endpoint_vel"

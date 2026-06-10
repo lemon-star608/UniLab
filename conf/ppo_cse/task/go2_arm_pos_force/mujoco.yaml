@@ -3,25 +3,38 @@ training:
   task_name: Go2ArmPosForce
   sim_backend: mujoco
 algo:
-  num_envs: 128
-  max_iterations: 6000
+  num_envs: 2048
+  max_iterations: 8000
   num_one_step_obs: 76          # actor single-step obs dim
   num_actor_history: 32         # must match env.history.num_actor_history
-  num_critic_history: 1
+  num_critic_history: 3
   empirical_normalization: false
   policy:
-    init_noise_std: 0.5
+    init_noise_std: 1.0
   algorithm:
-    learning_rate: 3.0e-4
-    entropy_coef: 1.0e-2
+    learning_rate: 5.0e-4       # ③ lower init LR to avoid early KL spike flooring it
+    entropy_coef: 5.0e-3        # ② let action std anneal (smoother actions)
+    num_learning_epochs: 3      # ① fewer epochs/rollout -> smaller KL, steadier LR
   estimator:
     target_start: 0             # CSE targets at the front of the 1-step critic obs
+    learning_rate: 1.0e-5       # fixed, decoupled from the adaptive policy LR (UniFP)
+    latent_dim: 64              # history(32) x 2, matching UniFP's encoder latent
+    enc_hidden_dims: [512, 256, 128]
+    dec_hidden_dims: [128, 64]
+    # Per-group target weights [lin_vel, ee_pos, force_ee, force_base] = [.2,.2,1,1],
+    # squared because the estimator applies them linearly (UniFP uses mse(pred*w, tgt*w)).
+    target_weights: [0.04, 0.04, 0.04, 0.04, 0.04, 0.04, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
 reward:
   tracking_sigma: 0.25
   tracking_ee_sigma: 1.0
   base_height_target: 0.40
   soft_torque_limit: 0.9
-  sigma_force: 0.02
+  ref_dof_scale: 0.1
+  stand_still_scale: 0.05
+  max_contact_force: 200.0
+  feet_air_time_threshold: 0.5
+  feet_height_target: 0.10
+  feet_height_high_target: 0.20
   scales:
     # force/position tracking (the unified objective)
     tracking_lin_vel_force_world: 2.0
@@ -30,22 +43,44 @@ reward:
     # gait reference + survival
     ref_dof_leg: 1.0
     alive: 1.5
+    feet_contact_number: 2.0
+    feet_air_time: 1.0
+    feet_height: 1.0
+    feet_height_high: -15.0
+    stand_still: 0.5
     # locomotion regularization
     lin_vel_z: -1.5
     ang_vel_xy: -0.02
     dof_vel: -8.0e-4
+    dof_vel_arm: -2.0e-4
+    dof_acc: -2.5e-7
+    dof_acc_arm: -4.5e-7
     action_rate: -0.02
+    action_rate_arm: -0.045
     torques: -5.0e-6
     base_height: -2.0
     hip_pos: -0.5
+    feet_pos_xy: -0.5
+    feet_drag: -1.2e-3          # ④ press harder against foot sliding under load
+    feet_contact_forces: -1.0e-3
+    collision: -5.0
+    dof_pos_limits: -10.0
     torque_limits: -0.005
 env:
   history:
     num_actor_history: 32
-    num_critic_history: 1
+    num_critic_history: 3   # functional value: critic stacks 3 privileged frames
+  control_config:
+    action_delay_steps: 3
   commands:
-    force_start_step: 6000
+    force_start_step: 96000   # control steps = 5000 iters x 24 steps/iter (forces on at ~iter 5000)
+    zero_vel_cmd_prob_after_force: 0.8
+    force_z_base_ext_scale: 0.05
   domain_rand:
     push_robots: true
     push_interval: 400
     max_force: [0.3, 0.3, 0.0]
+    randomize_gripper_mass: true
+    gripper_added_mass_range: [0.0, 0.12]
+    # friction_range left at the UniFP-aligned default [0.5, 1.8]; foot sliding
+    # is handled by the feet_drag penalty, not by shrinking the friction DR.

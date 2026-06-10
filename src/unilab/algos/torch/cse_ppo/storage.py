@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
-# Rollout storage for CSE-PPO. Mirrors the HIM-PPO storage: it keeps the current
-# and next critic (privileged) observations so the estimator can regress the
-# next-step target block.
+# Rollout storage for CSE-PPO. Mirrors the HIM-PPO storage. The concurrent state
+# estimator regresses the SAME-STEP privileged target block, so only the current
+# critic (privileged) observation is stored (no next-step buffer).
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ class CSERolloutStorage:
         def __init__(self) -> None:
             self.observations: torch.Tensor | None = None
             self.critic_observations: torch.Tensor | None = None
-            self.next_critic_observations: torch.Tensor | None = None
             self.actions: torch.Tensor | None = None
             self.rewards: torch.Tensor | None = None
             self.dones: torch.Tensor | None = None
@@ -29,7 +28,6 @@ class CSERolloutStorage:
         def clear(self) -> None:
             self.observations = None
             self.critic_observations = None
-            self.next_critic_observations = None
             self.actions = None
             self.rewards = None
             self.dones = None
@@ -68,10 +66,8 @@ class CSERolloutStorage:
                 *privileged_obs_shape,
                 device=self.device,
             )
-            self.next_privileged_observations = torch.zeros_like(self.privileged_observations)
         else:
             self.privileged_observations = None
-            self.next_privileged_observations = None
 
         self.rewards = torch.zeros(
             self.num_transitions_per_env, self.num_envs, 1, device=self.device
@@ -105,11 +101,7 @@ class CSERolloutStorage:
         if self.privileged_observations is not None:
             if transition.critic_observations is None:
                 raise ValueError("transition.critic_observations is required")
-            if transition.next_critic_observations is None:
-                raise ValueError("transition.next_critic_observations is required")
-            assert self.next_privileged_observations is not None
             self.privileged_observations[self.step].copy_(transition.critic_observations)
-            self.next_privileged_observations[self.step].copy_(transition.next_critic_observations)
         self.actions[self.step].copy_(transition.actions)
         self.rewards[self.step].copy_(transition.rewards.view(-1, 1))
         self.dones[self.step].copy_(transition.dones.view(-1, 1).bool())
@@ -151,12 +143,9 @@ class CSERolloutStorage:
 
         observations = self.observations.flatten(0, 1)
         if self.privileged_observations is not None:
-            assert self.next_privileged_observations is not None
             critic_observations = self.privileged_observations.flatten(0, 1)
-            next_critic_observations = self.next_privileged_observations.flatten(0, 1)
         else:
             critic_observations = observations
-            next_critic_observations = observations
 
         actions = self.actions.flatten(0, 1)
         values = self.values.flatten(0, 1)
@@ -173,7 +162,6 @@ class CSERolloutStorage:
                     observations[batch_idx],
                     critic_observations[batch_idx],
                     actions[batch_idx],
-                    next_critic_observations[batch_idx],
                     values[batch_idx],
                     advantages[batch_idx],
                     returns[batch_idx],

@@ -447,6 +447,12 @@
     <framepos objtype="site" objname="RR" name="RR_pos"/>
     <framepos objtype="site" objname="RL" name="RL_pos"/>
 
+    <!-- Thigh world positions (UniFP feet_pos_xy reward: ||foot_xy - thigh_xy||). -->
+    <framepos objtype="body" objname="FL_thigh" name="FL_thigh_pos"/>
+    <framepos objtype="body" objname="FR_thigh" name="FR_thigh_pos"/>
+    <framepos objtype="body" objname="RL_thigh" name="RL_thigh_pos"/>
+    <framepos objtype="body" objname="RR_thigh" name="RR_thigh_pos"/>
+
     <!-- Airbot Play sensors -->
   <jointpos name="joint1_pos" joint="joint1" />
   <jointpos name="joint2_pos" joint="joint2" />

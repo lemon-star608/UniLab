@@ -84,7 +84,9 @@ class CSEActorCritic(nn.Module):
 
     def _actor_input(self, obs_history: torch.Tensor) -> torch.Tensor:
         latent = self.estimator.get_latent(obs_history)
-        return torch.cat((obs_history[:, : self.num_one_step_obs], latent), dim=-1)
+        # The history is stored newest-frame-LAST, so the current single-step obs
+        # is the final block (matching UniFP's observations[:, -num_obs_now:]).
+        return torch.cat((obs_history[:, -self.num_one_step_obs :], latent), dim=-1)
 
     def update_distribution(self, obs_history: torch.Tensor) -> None:
         mean = self.actor(self._actor_input(obs_history))

@@ -56,7 +56,7 @@ class CSEEstimator(nn.Module):
         latent_dim: int = 19,
         dec_hidden_dims: list[int] | tuple[int, ...] = (64,),
         activation: str = "elu",
-        learning_rate: float = 1e-3,
+        learning_rate: float = 1e-5,
         max_grad_norm: float = 10.0,
         target_weights: list[float] | tuple[float, ...] | None = None,
         target_start: int = 0,
@@ -122,9 +122,13 @@ class CSEEstimator(nn.Module):
     def update(
         self,
         obs_history: torch.Tensor,
-        next_critic_obs: torch.Tensor,
+        critic_obs: torch.Tensor,
         lr: float | None = None,
     ) -> float:
+        # Same-step state estimation (Ji et al. 2022 / UniFP obs_pred): the target
+        # is the privileged block of the CURRENT critic obs, not the next step.
+        # When ``lr`` is None the estimator keeps its own fixed learning rate
+        # (decoupled from the adaptive policy LR, matching UniFP's 1e-5).
         if lr is not None:
             self.learning_rate = float(lr)
             for param_group in self.optimizer.param_groups:
@@ -132,12 +136,12 @@ class CSEEstimator(nn.Module):
 
         start = self.target_start
         end = start + self.num_pred
-        if next_critic_obs.shape[-1] < end:
+        if critic_obs.shape[-1] < end:
             raise ValueError(
-                "next_critic_obs is too small for the CSE estimator target slice: "
-                f"shape={tuple(next_critic_obs.shape)}, target=[{start}:{end}]"
+                "critic_obs is too small for the CSE estimator target slice: "
+                f"shape={tuple(critic_obs.shape)}, target=[{start}:{end}]"
             )
-        target = next_critic_obs[:, start:end].detach()
+        target = critic_obs[:, start:end].detach()
         pred = self.decoder(self.encoder(obs_history))
         weights = cast(torch.Tensor, self.target_weights).to(pred.device)
         loss = (weights * F.mse_loss(pred, target, reduction="none")).mean()
