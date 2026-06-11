@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import cast
 
 import torch
@@ -60,6 +61,7 @@ class CSEEstimator(nn.Module):
         max_grad_norm: float = 10.0,
         target_weights: list[float] | tuple[float, ...] | None = None,
         target_start: int = 0,
+        target_group_sizes: Sequence[int] | None = None,
     ) -> None:
         super().__init__()
         if temporal_steps <= 0:
@@ -75,6 +77,19 @@ class CSEEstimator(nn.Module):
         self.num_latent = int(latent_dim)
         self.max_grad_norm = float(max_grad_norm)
         self.target_start = int(target_start)
+
+        # When ``target_group_sizes`` is given, the estimator loss follows UniFP's
+        # per-group form (``target_weights`` are per-GROUP); otherwise it is the
+        # legacy per-dim weighted mean (``target_weights`` are per-dim).
+        if target_group_sizes is not None:
+            group_sizes = tuple(int(s) for s in target_group_sizes)
+            if sum(group_sizes) != self.num_pred:
+                raise ValueError(
+                    f"target_group_sizes {group_sizes} must sum to num_pred {self.num_pred}"
+                )
+            self.target_group_sizes: tuple[int, ...] | None = group_sizes
+        else:
+            self.target_group_sizes = None
 
         enc_input_dim = self.temporal_steps * self.num_one_step_obs
         enc_layers: list[nn.Module] = []
@@ -93,13 +108,17 @@ class CSEEstimator(nn.Module):
         dec_layers += [nn.Linear(last, self.num_pred)]
         self.decoder = nn.Sequential(*dec_layers)
 
+        expected_weights = (
+            len(self.target_group_sizes) if self.target_group_sizes is not None else self.num_pred
+        )
         if target_weights is None:
-            weights = torch.ones(self.num_pred)
+            weights = torch.ones(expected_weights)
         else:
             weights = torch.as_tensor(list(target_weights), dtype=torch.float32)
-            if weights.numel() != self.num_pred:
+            if weights.numel() != expected_weights:
+                kind = "groups" if self.target_group_sizes is not None else "num_pred"
                 raise ValueError(
-                    f"target_weights length {weights.numel()} != num_pred {self.num_pred}"
+                    f"target_weights length {weights.numel()} != {expected_weights} ({kind})"
                 )
         self.register_buffer("target_weights", weights)
 
@@ -118,6 +137,24 @@ class CSEEstimator(nn.Module):
     def predict(self, obs_history: torch.Tensor) -> torch.Tensor:
         """Decode the estimated targets (for evaluation / debugging)."""
         return self.decoder(self.encoder(obs_history.detach())).detach()
+
+    def _regression_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Weighted supervised regression loss for the estimated targets."""
+        weights = cast(torch.Tensor, self.target_weights).to(pred.device)
+        if self.target_group_sizes is None:
+            # Legacy per-dim weighted mean over all target dims.
+            return (weights * F.mse_loss(pred, target, reduction="none")).mean()
+        # UniFP form (ppo_cse_pf/ppo.py:187-196): sum over target groups of
+        # mse(pred_g * w_g, target_g * w_g). Per-group weights enter the MSE (so
+        # they are effectively squared), and per-group means are SUMMED, not
+        # averaged across groups.
+        loss = pred.new_zeros(())
+        offset = 0
+        for size, weight in zip(self.target_group_sizes, weights):
+            sl = slice(offset, offset + size)
+            loss = loss + F.mse_loss(pred[:, sl] * weight, target[:, sl] * weight)
+            offset += size
+        return loss
 
     def update(
         self,
@@ -143,8 +180,7 @@ class CSEEstimator(nn.Module):
             )
         target = critic_obs[:, start:end].detach()
         pred = self.decoder(self.encoder(obs_history))
-        weights = cast(torch.Tensor, self.target_weights).to(pred.device)
-        loss = (weights * F.mse_loss(pred, target, reduction="none")).mean()
+        loss = self._regression_loss(pred, target)
 
         self.optimizer.zero_grad()
         loss.backward()

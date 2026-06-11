@@ -4,8 +4,8 @@ training:
   sim_backend: mujoco
 algo:
   num_envs: 2048
-  max_iterations: 8000
-  
+  max_iterations: 20000        # toward UniFP's budget; LR no longer floors early
+
   num_one_step_obs: 76          # actor single-step obs dim
   num_actor_history: 32         # must match env.history.num_actor_history
   num_critic_history: 3
@@ -16,15 +16,18 @@ algo:
     learning_rate: 5.0e-4       # ③ lower init LR to avoid early KL spike flooring it
     entropy_coef: 5.0e-3        # ② let action std anneal (smoother actions)
     num_learning_epochs: 3      # ① fewer epochs/rollout -> smaller KL, steadier LR
+    desired_kl: 0.02            # ⑤ looser KL target -> controller keeps LR higher
+    min_learning_rate: 5.0e-5   # ⑤ raise adaptive-LR floor (was 1e-5) so late training keeps moving
   estimator:
     target_start: 0             # CSE targets at the front of the 1-step critic obs
-    learning_rate: 1.0e-4       # ② raised from UniFP 1e-5: sparse/short force training needs faster estimator learning
+    learning_rate: 1.0e-5       # UniFP adaptation_module_learning_rate (faithful; was retuned to 1e-4)
     latent_dim: 64              # history(32) x 2, matching UniFP's encoder latent
     enc_hidden_dims: [512, 256, 128]
     dec_hidden_dims: [128, 64]
-    # Per-group target weights [lin_vel, ee_pos, force_ee, force_base] = [.2,.2,1,1],
-    # squared because the estimator applies them linearly (UniFP uses mse(pred*w, tgt*w)).
-    target_weights: [0.04, 0.04, 0.04, 0.04, 0.04, 0.04, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    # UniFP per-GROUP weights [lin_vel, ee_pos, force_ee, force_base], applied as
+    # sum_g mse(pred_g*w_g, tgt_g*w_g) (weights enter the MSE, so squared inside).
+    target_group_sizes: [3, 3, 3, 3]
+    target_weights: [0.2, 0.2, 1.0, 1.0]
 reward:
   tracking_sigma: 0.25
   tracking_ee_sigma: 1.0
@@ -72,27 +75,34 @@ env:
     num_actor_history: 32
     num_critic_history: 3   # functional value: critic stacks 3 privileged frames
   goal_ee:
-    # First EE target ~= the reset arm pose's EE (mean over jitter), removing the
-    # systematic outward jump at episode start (reset EE ~ [0.24, 33deg, 0]).
-    init_pos_start: [0.24, 0.6, 0.0]
-    # Cap reach at ~0.5m: keep the arm in its dexterous/strong mid-range for force
-    # control (0.6 pushed it to ~90% extension -> weak force authority).
-    pos_l: [0.25, 0.5]
+    # Reverted to UniFP values (the migration had retuned these to
+    # init_pos_start [0.24,0.6,0] / pos_l [0.25,0.5]) to reproduce UniFP's
+    # EE-goal training distribution.
+    init_pos_start: [0.5, 0.7853981633974483, 0.0]  # [0.5, pi/4, 0] (UniFP)
+    pos_l: [0.25, 0.6]
   control_config:
     action_delay_steps: 3
   commands:
-    force_start_step: 36000    # ③ control steps = 1500 iters x 24 (forces on at ~iter 1500)
+    force_start_step: 96000    # ③ control steps = 4000 iters x 24 (forces on at ~iter 3000)
     zero_vel_cmd_prob_after_force: 0.8
     force_z_base_ext_scale: 0.2   # ④ was 0.05; train vertical base disturbance rejection
-    # ① denser ext force events -> more estimator signal + more disturbance practice
+    # ① denser ext force events -> more estimator signal + more disturbance practice.
+    # Intervals are now per-channel (UniFP separates cmd vs ext); this densified
+    # retune is applied to both channels per body. The fixed settling-time hold
+    # (gripper 0.5 s, base 1.0 s) stays at the UniFP defaults.
     gripper_forced_prob_ext: 0.5
     base_forced_prob_ext: 0.5
-    push_gripper_interval_s: [3.0, 6.0]
-    push_base_interval_s: [4.0, 8.0]
+    push_gripper_interval_s_cmd: [3.0, 6.0]
+    push_gripper_interval_s_ext: [3.0, 6.0]
+    push_base_interval_s_cmd: [4.0, 8.0]
+    push_base_interval_s_ext: [4.0, 8.0]
   domain_rand:
-    push_robots: true
+    # UniFP base-velocity impulse push (0.3 m/s, 2.5x when standing), applied
+    # in-env. The shared force-based interval push stays off (push_robots=false).
+    push_robots: false
+    velocity_push: true
     push_interval: 400
-    max_force: [0.3, 0.3, 0.0]
+    max_push_vel_xy: 0.3
     randomize_gripper_mass: true
     gripper_added_mass_range: [0.0, 0.12]
     # ground friction / base COM DR now use the dr_utils contract field names

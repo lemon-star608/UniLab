@@ -92,6 +92,143 @@ def test_estimator_default_lr_is_fixed_when_not_overridden():
     assert est.optimizer.param_groups[0]["lr"] == pytest.approx(1e-5)
 
 
+def test_actor_path_backprops_into_estimator_encoder():
+    """UniFP feeds a NON-detached latent to the actor (update_distribution:
+    ``latent = adaptation_encoder_module(obs)``), so the PPO/actor loss co-trains
+    the estimator encoder. The migration double-detached it, severing the
+    encoder<->RL coupling that is the core of the concurrent state estimator.
+    """
+    ac = _make_actor_critic(history=8, one_step=76, latent=19)
+    hist = torch.randn(4, 8 * 76)
+    ac.update_distribution(hist)
+    loss = ac.action_mean.pow(2).mean()
+    loss.backward()
+    enc_weight = ac.estimator.encoder[0].weight
+    assert enc_weight.grad is not None
+    assert torch.count_nonzero(enc_weight.grad) > 0
+
+
+def test_estimator_loss_is_unifp_per_group_sum():
+    """UniFP estimator loss = sum over the 4 target groups of
+    ``mse(pred_g * w_g, target_g * w_g)`` (legged_gym ppo.py:187-196), NOT a
+    single weighted mean over all 12 dims. The migration used the latter, which
+    changes the gradient scale by ~4x relative to UniFP.
+    """
+    import torch.nn.functional as F
+
+    est = CSEEstimator(
+        temporal_steps=4,
+        num_one_step_obs=10,
+        num_pred=12,
+        target_group_sizes=[3, 3, 3, 3],
+        target_weights=[0.2, 0.2, 1.0, 1.0],
+    )
+    torch.manual_seed(0)
+    pred = torch.randn(8, 12)
+    target = torch.randn(8, 12)
+    got = est._regression_loss(pred, target)
+    groups = [(0, 3, 0.2), (3, 6, 0.2), (6, 9, 1.0), (9, 12, 1.0)]
+    expected = sum(F.mse_loss(pred[:, s:e] * w, target[:, s:e] * w) for s, e, w in groups)
+    assert torch.allclose(got, expected)
+    # And it must differ from the old all-dim weighted mean (the migration bug).
+    per_dim_w = torch.tensor([0.2] * 6 + [1.0] * 6)
+    old = (per_dim_w * F.mse_loss(pred, target, reduction="none")).mean()
+    assert not torch.allclose(got, old)
+
+
+def test_cse_ppo_update_runs_end_to_end():
+    """A full CSEPPO.update() cycle runs without error with the reordered
+    PPO-step-then-estimator-step and the non-detached encoder, returns finite
+    losses, and updates the network parameters.
+    """
+    import math
+
+    from unilab.algos.torch.cse_ppo.algorithm import CSEPPO
+
+    torch.manual_seed(0)
+    num_envs, num_steps = 8, 6
+    history, one_step, num_actions, critic_dim = 4, 10, 3, 12
+    num_actor_obs = history * one_step
+
+    ac = CSEActorCritic(
+        num_actor_obs=num_actor_obs,
+        num_critic_obs=critic_dim,
+        num_one_step_obs=one_step,
+        num_actions=num_actions,
+        actor_hidden_dims=[32, 32],
+        critic_hidden_dims=[32, 32],
+        estimator={
+            "num_pred": 12,
+            "latent_dim": 8,
+            "enc_hidden_dims": [32],
+            "dec_hidden_dims": [16],
+            "target_group_sizes": [3, 3, 3, 3],
+            "target_weights": [0.2, 0.2, 1.0, 1.0],
+            "target_start": 0,
+            "learning_rate": 1e-3,
+        },
+    )
+    alg = CSEPPO(
+        ac,
+        num_learning_epochs=2,
+        num_mini_batches=2,
+        learning_rate=1e-3,
+        schedule="fixed",
+        desired_kl=None,
+    )
+    alg.init_storage(num_envs, num_steps, [num_actor_obs], [critic_dim], [num_actions])
+
+    obs = torch.randn(num_envs, num_actor_obs)
+    critic_obs = torch.randn(num_envs, critic_dim)
+    for _ in range(num_steps):
+        alg.act(obs, critic_obs)
+        next_obs = torch.randn(num_envs, num_actor_obs)
+        next_critic = torch.randn(num_envs, critic_dim)
+        rewards = torch.randn(num_envs)
+        dones = torch.zeros(num_envs, dtype=torch.bool)
+        alg.process_env_step(next_obs, rewards, dones, {})
+        obs, critic_obs = next_obs, next_critic
+    alg.compute_returns(critic_obs)
+
+    enc_before = ac.estimator.encoder[0].weight.detach().clone()
+    actor_before = ac.actor[0].weight.detach().clone()
+    value_loss, surrogate_loss, estimation_loss = alg.update()
+
+    assert math.isfinite(value_loss)
+    assert math.isfinite(surrogate_loss)
+    assert math.isfinite(estimation_loss)
+    # Both the encoder and the actor were updated during the cycle.
+    assert not torch.allclose(enc_before, ac.estimator.encoder[0].weight)
+    assert not torch.allclose(actor_before, ac.actor[0].weight)
+
+
+def test_lr_adaptation_respects_configurable_clamp():
+    """The adaptive-KL learning rate must clamp to the configured
+    [min_learning_rate, max_learning_rate]. The floor used to be a hardcoded
+    1e-5; raising it keeps late training productive instead of stalling.
+    """
+    from unilab.algos.torch.cse_ppo.algorithm import CSEPPO
+
+    ac = _make_actor_critic(history=4, one_step=10, latent=8)
+    alg = CSEPPO(
+        ac,
+        schedule="adaptive",
+        desired_kl=0.01,
+        learning_rate=1e-3,
+        min_learning_rate=5e-5,
+        max_learning_rate=1e-2,
+    )
+    # KL >> 2*desired repeatedly -> LR falls, but NOT below min_learning_rate.
+    for _ in range(100):
+        alg._adapt_learning_rate(1.0)
+    assert alg.learning_rate == pytest.approx(5e-5)
+    assert alg.optimizer.param_groups[0]["lr"] == pytest.approx(5e-5)
+    # KL << desired/2 repeatedly -> LR rises to max_learning_rate.
+    for _ in range(100):
+        alg._adapt_learning_rate(1e-9)
+    assert alg.learning_rate == pytest.approx(1e-2)
+
+
 def test_actor_input_width_matches_task_architecture():
     """Task config uses latent_dim=64 (history x 2); actor input = one_step + latent."""
     ac = CSEActorCritic(

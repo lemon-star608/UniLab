@@ -27,11 +27,13 @@ algo:
     enc_hidden_dims: [256, 128]
     latent_dim: 19
     dec_hidden_dims: [64]
-    learning_rate: 1.0e-3
+    learning_rate: 1.0e-5      # UniFP adaptation_module_learning_rate
     max_grad_norm: 10.0
     target_start: 0            # target block sits at the front of the critic obs
-    # Per-group regression weights (force groups dominate, as in UniFP).
-    target_weights: [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    # UniFP per-GROUP weights [base_lin_vel, ee_pos, force_ee, force_base], applied
+    # as sum_g mse(pred_g*w_g, tgt_g*w_g) (force groups dominate).
+    target_group_sizes: [3, 3, 3, 3]
+    target_weights: [0.2, 0.2, 1.0, 1.0]
   algorithm:
     value_loss_coef: 1.0
     use_clipped_value_loss: true
@@ -42,6 +44,8 @@ algo:
     learning_rate: 1.0e-3
     schedule: adaptive
     desired_kl: 0.01
+    min_learning_rate: 1.0e-5    # KL-adaptive LR clamp floor
+    max_learning_rate: 1.0e-2    # KL-adaptive LR clamp ceiling
     gamma: 0.99
     lam: 0.95
     max_grad_norm: 1.0

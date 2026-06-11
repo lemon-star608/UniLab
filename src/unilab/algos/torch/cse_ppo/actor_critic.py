@@ -83,7 +83,12 @@ class CSEActorCritic(nn.Module):
         raise NotImplementedError
 
     def _actor_input(self, obs_history: torch.Tensor) -> torch.Tensor:
-        latent = self.estimator.get_latent(obs_history)
+        # UniFP feeds a NON-detached latent to the actor (update_distribution:
+        # ``latent = adaptation_encoder_module(obs)``), so the PPO surrogate/value
+        # gradient co-trains the estimator encoder through the shared optimizer.
+        # Detaching here (the migration's bug) severs the encoder<->RL coupling
+        # that defines the concurrent state estimator.
+        latent = self.estimator.encode(obs_history)
         # The history is stored newest-frame-LAST, so the current single-step obs
         # is the final block (matching UniFP's observations[:, -num_obs_now:]).
         return torch.cat((obs_history[:, -self.num_one_step_obs :], latent), dim=-1)

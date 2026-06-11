@@ -106,10 +106,13 @@ class _ForceSchedule:
 
     Faithful in spirit to UniFP's ``_push_gripper`` / ``_push_robot_base``
     state machines: each env idles for a random interval, then runs one force
-    episode toward a random target with a symmetric ramp and a hold, then idles
-    again. ``prob`` is the probability that any given episode actually fires;
-    otherwise the force stays zero for that interval (UniFP's ``freed_envs``).
-    The returned force is per-env ``(N, 3)`` in newtons.
+    episode toward a random target. The episode ramps up over ``push_duration``
+    (sampled from ``duration_range``), HOLDS at the target for a FIXED
+    ``settling`` window (UniFP's ``settling_time_force_*``, gripper 0.5 s /
+    base 1.0 s), then ramps down over ``push_duration`` again; total length is
+    ``2 * push_duration + settling``. ``prob`` is the probability that any given
+    episode actually fires; otherwise the force stays zero for that interval
+    (UniFP's ``freed_envs``). The returned force is per-env ``(N, 3)`` in newtons.
     """
 
     def __init__(
@@ -121,6 +124,7 @@ class _ForceSchedule:
         prob: float,
         dtype: Any,
         z_scale: float = 1.0,
+        settling: int = 0,
     ):
         self._n = num_envs
         self._mag = mag_range
@@ -128,6 +132,8 @@ class _ForceSchedule:
         self._duration = duration_range
         self._prob = float(prob)
         self._dtype = dtype
+        # Fixed peak-hold window in control steps (UniFP settling_time_force_*).
+        self._settling = max(0, int(settling))
         # UniFP attenuates / zeros the z-component for base forces:
         # base-ext z is scaled by force_z_base_ext_scale (0.05); base-cmd z is 0.
         self._z_scale = float(z_scale)
@@ -158,9 +164,13 @@ class _ForceSchedule:
             mags = np.random.uniform(self._mag[0], self._mag[1], size=(len(fire_ids), 3))
             mags[:, 2] *= self._z_scale
             self._target[fire_ids] = mags.astype(self._dtype)
-            dur = np.random.randint(self._duration[0], self._duration[1] + 1, size=len(fire_ids))
-            self._ramp[fire_ids] = np.maximum(1, dur // 3)
-            self._hold[fire_ids] = dur - 2 * np.maximum(1, dur // 3)
+            # ``push_duration`` is the ramp length (UniFP push_duration_s); the
+            # hold is a FIXED settling window, independent of the sampled ramp.
+            push_duration = np.random.randint(
+                self._duration[0], self._duration[1] + 1, size=len(fire_ids)
+            )
+            self._ramp[fire_ids] = np.maximum(1, push_duration)
+            self._hold[fire_ids] = self._settling
             self._elapsed[fire_ids] = 0
             self._active[fire_ids] = True
         # Non-firing envs simply re-arm their idle timer.
@@ -226,9 +236,13 @@ class ObsScales:
 
 @dataclass
 class PosForceNoiseConfig:
+    # Noise is added to the ALREADY-SCALED observation, so each scale below is
+    # UniFP's noise_scales[x] * obs_scales[x] (with noise_level=1):
+    #   dof_pos: 0.01 * 1.0  = 0.01   dof_vel: 1.5 * 0.05 = 0.075
+    #   gravity/orn: 0.05    ang_vel: 0.2 * 0.25(applied later) -> 0.2 here
     level: float = 1.0  # UniFP add_noise=True, noise_level=1.0 (was 0.0 -> perfect obs)
-    scale_joint_angle: float = 0.03
-    scale_joint_vel: float = 0.5
+    scale_joint_angle: float = 0.01
+    scale_joint_vel: float = 0.075
     scale_gyro: float = 0.2
     scale_gravity: float = 0.05
     scale_ang_vel: float = 0.2
@@ -285,11 +299,18 @@ class PosForceCommandsConfig:
     max_push_force_xyz_gripper_ext: list[float] = field(default_factory=lambda: [-15.0, 15.0])
     max_push_force_xyz_base_cmd: list[float] = field(default_factory=lambda: [-25.0, 25.0])
     max_push_force_xyz_base_ext: list[float] = field(default_factory=lambda: [-20.0, 20.0])
-    # Force-episode timing in seconds [min, max]: idle interval and active duration.
-    push_gripper_interval_s: list[float] = field(default_factory=lambda: [5.0, 10.0])
+    # Force-episode timing in seconds [min, max]. UniFP uses DISTINCT cmd vs ext
+    # idle intervals per body; ``*_duration_s`` is the ramp (push_duration) and
+    # ``settling_time_force_*_s`` is the fixed peak-hold window.
+    push_gripper_interval_s_cmd: list[float] = field(default_factory=lambda: [5.0, 10.0])
+    push_gripper_interval_s_ext: list[float] = field(default_factory=lambda: [6.0, 12.0])
     push_gripper_duration_s: list[float] = field(default_factory=lambda: [0.5, 1.5])
-    push_base_interval_s: list[float] = field(default_factory=lambda: [6.0, 12.0])
+    push_base_interval_s_cmd: list[float] = field(default_factory=lambda: [5.0, 10.0])
+    push_base_interval_s_ext: list[float] = field(default_factory=lambda: [8.0, 14.0])
     push_base_duration_s: list[float] = field(default_factory=lambda: [0.5, 1.5])
+    # Fixed peak-hold ("settling") time per body (UniFP settling_time_force_*_s).
+    settling_time_force_gripper_s: float = 0.5
+    settling_time_force_base_s: float = 1.0
     gripper_forced_prob_cmd: float = 0.4
     gripper_forced_prob_ext: float = 0.3
     base_forced_prob_cmd: float = 0.4
@@ -330,6 +351,12 @@ class PosForceDomainRandConfig:
     randomize_ground_friction: bool = True
     # Multiplier on the model's default ground friction (default ~1.0 => ~[0.5, 1.8]).
     ground_friction_multiplier_range: list[float] = field(default_factory=lambda: [0.5, 1.8])
+    # The foot geom has priority=1 in the MJCF, so it OVERRIDES the floor friction
+    # at the contact -> randomizing the ground (above) never reaches the feet.
+    # Randomize the FOOT friction directly (absolute range, matching UniFP's
+    # per-env foot-shape friction_range) so contact friction actually varies.
+    randomize_foot_friction: bool = True
+    foot_friction_range: list[float] = field(default_factory=lambda: [0.5, 1.8])
     randomize_base_mass: bool = True
     added_mass_range: list[float] = field(default_factory=lambda: [0.0, 4.0])
     random_com: bool = True
@@ -342,10 +369,16 @@ class PosForceDomainRandConfig:
     # Gripper payload mass (UniFP adds 0-0.12 kg to the wrist/gripper link).
     randomize_gripper_mass: bool = True
     gripper_added_mass_range: list[float] = field(default_factory=lambda: [0.0, 0.12])
-    # Root-velocity push DR (handled by the shared interval push plan).
-    push_robots: bool = True
+    # Base-velocity impulse push (UniFP _push_robots): every ``push_interval``
+    # control steps, overwrite the base x/y linear velocity with U(-vmax, vmax),
+    # amplified 2.5x for envs commanded to stand still. Applied in-env by
+    # ``Go2ArmPosForceEnv._maybe_apply_velocity_push``. The shared force-based
+    # interval push (build_interval_push_plan) is left OFF because a small xfrc
+    # force on a ~15 kg base is a near-no-op; ``push_robots`` gates only that path.
+    push_robots: bool = False
+    velocity_push: bool = True
     push_interval: int = 400
-    max_force: list[float] = field(default_factory=lambda: [0.3, 0.3, 0.0])
+    max_push_vel_xy: float = 0.3
     push_body_name: str = "base"
 
 
@@ -447,6 +480,7 @@ class Go2ArmPosForceDRProvider(LocomotionDRProvider):
         env._apply_reset_dofs(plan.qpos, env_ids)
         env._sample_motor_strength(env_ids)
         env._apply_gripper_mass_dr(plan.randomization, env_ids)
+        env._apply_foot_friction_dr(plan.randomization, env_ids)
         env._cache_reset_dr(env_ids, plan.randomization)
         env.reset_ee_goals(env_ids, plan.info_updates["commands"])
         env._reset_force_schedules(env_ids)
@@ -605,43 +639,53 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         def _steps(seconds: list[float]) -> tuple[int, int]:
             return (max(1, int(seconds[0] / ctrl_dt)), max(1, int(seconds[1] / ctrl_dt)))
 
-        g_int = _steps(cmds.push_gripper_interval_s)
+        # Distinct cmd vs ext idle intervals per body (UniFP); shared ramp
+        # (push_duration) and a fixed settling-time hold per body.
+        g_int_cmd = _steps(cmds.push_gripper_interval_s_cmd)
+        g_int_ext = _steps(cmds.push_gripper_interval_s_ext)
+        b_int_cmd = _steps(cmds.push_base_interval_s_cmd)
+        b_int_ext = _steps(cmds.push_base_interval_s_ext)
         g_dur = _steps(cmds.push_gripper_duration_s)
-        b_int = _steps(cmds.push_base_interval_s)
         b_dur = _steps(cmds.push_base_duration_s)
+        g_settle = max(0, int(cmds.settling_time_force_gripper_s / ctrl_dt))
+        b_settle = max(0, int(cmds.settling_time_force_base_s / ctrl_dt))
         self._sched_gripper_cmd = _ForceSchedule(
             num_envs,
             tuple(cmds.max_push_force_xyz_gripper_cmd),
-            g_int,
+            g_int_cmd,
             g_dur,
             cmds.gripper_forced_prob_cmd,
             dtype,
+            settling=g_settle,
         )
         self._sched_gripper_ext = _ForceSchedule(
             num_envs,
             tuple(cmds.max_push_force_xyz_gripper_ext),
-            g_int,
+            g_int_ext,
             g_dur,
             cmds.gripper_forced_prob_ext,
             dtype,
+            settling=g_settle,
         )
         self._sched_base_cmd = _ForceSchedule(
             num_envs,
             tuple(cmds.max_push_force_xyz_base_cmd),
-            b_int,
+            b_int_cmd,
             b_dur,
             cmds.base_forced_prob_cmd,
             dtype,
             z_scale=0.0,  # UniFP zeroes the commanded base force z-component.
+            settling=b_settle,
         )
         self._sched_base_ext = _ForceSchedule(
             num_envs,
             tuple(cmds.max_push_force_xyz_base_ext),
-            b_int,
+            b_int_ext,
             b_dur,
             cmds.base_forced_prob_ext,
             dtype,
             z_scale=float(cmds.force_z_base_ext_scale),
+            settling=b_settle,
         )
 
         # Command resample timer.
@@ -669,9 +713,15 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         if cfg.domain_rand.randomize_ground_friction:
             base_geom_friction = backend.get_geom_friction()
             ground_geom_id = backend.get_geom_id(cfg.asset.ground)
-        # Remember the ground geom so the friction privileged readback reads the
-        # geom that is actually randomized (not geom 0, a robot geom).
         self._ground_geom_id = ground_geom_id
+        # Foot collision geoms (priority=1) govern the foot-floor contact friction,
+        # so the friction DR must target THESE, not the floor. Cache their ids and
+        # the full geom-friction table (used to seed the payload when ground DR is
+        # off). The privileged friction readback also reads a foot geom.
+        self._base_geom_friction_full = backend.get_geom_friction()
+        self._foot_geom_ids = np.asarray(
+            [backend.get_geom_id(name) for name in ("FL", "FR", "RL", "RR")], dtype=np.int32
+        )
         self._init_domain_randomization(
             Go2ArmPosForceDRProvider(
                 base_body_mass=base_body_mass,
@@ -942,6 +992,31 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         table[:, self._gripper_body_id] += delta
         randomization.body_mass = table
 
+    def _apply_foot_friction_dr(self, randomization: Any, env_ids: np.ndarray) -> None:
+        """Randomize per-env FOOT friction in the reset payload (UniFP-style).
+
+        The foot geom has priority=1, so it overrides the floor at the contact and
+        ``randomize_ground_friction`` never reaches the feet. Set the foot geoms'
+        tangential friction to one absolute ``U(foot_friction_range)`` bucket per
+        env (all 4 feet share it, like UniFP's per-env friction bucket); the
+        priority-1 foot then imposes that friction on the foot-floor contact.
+        """
+        cfg = self._cfg.domain_rand
+        if randomization is None or not cfg.randomize_foot_friction:
+            return
+        n = len(env_ids)
+        lo, hi = cfg.foot_friction_range
+        samples = np.random.uniform(lo, hi, size=n).astype(np.float64)
+        table = getattr(randomization, "geom_friction", None)
+        if table is None:
+            ngeom = self._base_geom_friction_full.shape[0]
+            table = np.broadcast_to(self._base_geom_friction_full, (n, ngeom, 3)).copy()
+        else:
+            table = np.asarray(table, dtype=np.float64).copy()
+        for gid in self._foot_geom_ids:
+            table[:, int(gid), 0] = samples
+        randomization.geom_friction = table
+
     def _cache_reset_dr(self, env_ids: np.ndarray, randomization: Any) -> None:
         """Cache realized reset DR values for the privileged observation."""
         if randomization is None:
@@ -955,8 +1030,9 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         friction = getattr(randomization, "geom_friction", None)
         if friction is not None:
             fr = np.asarray(friction, dtype=self._np_dtype)
-            # Tangential friction of the ground geom (the one we randomize).
-            gid = self._ground_geom_id if self._ground_geom_id is not None else 0
+            # Tangential friction of a FOOT geom — the priority-1 foot governs the
+            # actual foot-floor contact, so this is the friction the policy feels.
+            gid = int(self._foot_geom_ids[0])
             self._dr_friction[env_ids] = fr[:, gid, 0:1]
 
     # ── control: Python PD via per-substep pre-step hook ──────────────────
@@ -976,6 +1052,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         else:
             exec_actions = actions
         self._update_forces(state)
+        self._maybe_apply_velocity_push(state.info.get("commands"))
         # Position targets = default + action * motor_strength * action_scale.
         self._motor_targets = (
             self.default_angles + exec_actions * self._motor_strength * self._action_scale
@@ -1004,6 +1081,28 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         applied = np.stack([self._force_ee_world, self._force_base_world], axis=1)
         if enabled and np.any(applied):
             self._backend.apply_body_force(self._force_body_ids, applied.astype(np.float64))
+
+    def _maybe_apply_velocity_push(self, commands: np.ndarray | None) -> None:
+        """UniFP ``_push_robots``: a base-velocity impulse domain randomization.
+
+        Every ``push_interval`` control steps, overwrite the base horizontal
+        linear velocity with ``U(-max_push_vel_xy, max_push_vel_xy)`` (world
+        frame, matching Isaac ``root_states[:, 7:9]``), amplified 2.5x for envs
+        whose velocity command is ~zero (a harder standing-recovery test). The
+        write lands in the authoritative physics state and is consumed by the
+        next physics substep, so it acts as a one-shot velocity impulse.
+        """
+        dr = self._cfg.domain_rand
+        if not dr.velocity_push or dr.push_interval <= 0:
+            return
+        if self.step_counter <= 0 or self.step_counter % dr.push_interval != 0:
+            return
+        vmax = float(dr.max_push_vel_xy)
+        vel = np.random.uniform(-vmax, vmax, size=(self._num_envs, 2)).astype(self._np_dtype)
+        if commands is not None:
+            standing = ~self._command_is_moving(commands)
+            vel[standing] *= 2.5
+        self._backend.get_base_lin_vel()[:, 0:2] = vel
 
     def _reset_force_schedules(self, env_ids: np.ndarray) -> None:
         for sched in (
@@ -1120,14 +1219,19 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         actor_raw, critic_raw = self._compute_raw_obs(info, env_ids=env_ids)
         obs = self._update_history(actor_raw, critic_raw, env_ids=env_ids)
         reward = self._compute_reward(info, linvel, gyro, gravity, dof_pos, dof_vel)
-        terminated = self._compute_terminated(gravity)
+        terminated = self._compute_terminated(self._backend.get_base_quat())
         # dof acceleration uses the previous step's velocity; update after rewards.
         self._last_dof_vel = dof_vel.copy()
         return state.replace(obs=obs, reward=reward, terminated=terminated)
 
-    def _compute_terminated(self, gravity: np.ndarray) -> np.ndarray:
-        # Fall when the projected up-axis tips past horizontal.
-        return gravity[:, 2] <= 0.0
+    def _compute_terminated(self, base_quat: np.ndarray) -> np.ndarray:
+        # UniFP check_termination: fall when |pitch| > 1.0 rad or |roll| > 0.8 rad
+        # (legged_robot_go2arm_pos_force.py:205). This is much earlier and roll-
+        # asymmetric vs the old gravity_z<=0 (~90 deg) test.
+        roll_pitch = _roll_pitch_from_quat(base_quat)
+        roll = roll_pitch[:, 0]
+        pitch = roll_pitch[:, 1]
+        return (np.abs(pitch) > 1.0) | (np.abs(roll) > 0.8)
 
     # ── observations ──────────────────────────────────────────────────────
 
@@ -1219,7 +1323,9 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         base_yaw_quat = np_yaw_quat(base_quat)
         force_cmd_world = np_quat_apply(base_yaw_quat, self._force_ee_cmd[env_ids])
         forces_offset = self._force_ee_world[env_ids] + force_cmd_world
-        goal_offset_world = forces_offset / self._gripper_force_kp + self._curr_ee_goal_world[env_ids]
+        goal_offset_world = (
+            forces_offset / self._gripper_force_kp + self._curr_ee_goal_world[env_ids]
+        )
         center = self.get_ee_goal_spherical_center()[env_ids]
         goal_offset_local = np_quat_apply_inverse(base_yaw_quat, goal_offset_world - center)
         ee_goal_offset_sphere = cart2sphere(goal_offset_local) * np.asarray(

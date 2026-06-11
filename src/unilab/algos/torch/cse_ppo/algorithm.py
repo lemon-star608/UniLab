@@ -35,6 +35,8 @@ class CSEPPO:
         use_clipped_value_loss: bool = True,
         schedule: str = "fixed",
         desired_kl: float | None = 0.01,
+        min_learning_rate: float = 1e-5,
+        max_learning_rate: float = 1e-2,
         device: str = "cpu",
         **kwargs: Any,
     ) -> None:
@@ -43,6 +45,8 @@ class CSEPPO:
         self.desired_kl = desired_kl
         self.schedule = schedule
         self.learning_rate = float(learning_rate)
+        self.min_learning_rate = float(min_learning_rate)
+        self.max_learning_rate = float(max_learning_rate)
 
         self.actor_critic = actor_critic
         self.actor_critic.to(self.device)
@@ -143,6 +147,21 @@ class CSEPPO:
         assert self.storage is not None
         self.storage.compute_returns(last_values, self.gamma, self.lam)
 
+    def _adapt_learning_rate(self, kl_mean: float) -> None:
+        """KL-adaptive learning-rate step, clamped to the configured bounds.
+
+        The clamp floor (``min_learning_rate``) is configurable so late training
+        does not stall at a hardcoded 1e-5 once the KL controller drives it down.
+        """
+        if self.desired_kl is None or self.schedule != "adaptive":
+            return
+        if kl_mean > self.desired_kl * 2.0:
+            self.learning_rate = max(self.min_learning_rate, self.learning_rate / 1.5)
+        elif 0.0 < kl_mean < self.desired_kl / 2.0:
+            self.learning_rate = min(self.max_learning_rate, self.learning_rate * 1.5)
+        for param_group in self.optimizer.param_groups:
+            param_group["lr"] = self.learning_rate
+
     def update(self) -> tuple[float, float, float]:
         assert self.storage is not None
         mean_value_loss = 0.0
@@ -182,19 +201,7 @@ class CSEPPO:
                         dim=-1,
                     )
                     kl_mean = torch.mean(kl)
-                    if kl_mean > self.desired_kl * 2.0:
-                        self.learning_rate = max(1e-5, self.learning_rate / 1.5)
-                    elif kl_mean < self.desired_kl / 2.0 and kl_mean > 0.0:
-                        self.learning_rate = min(1e-2, self.learning_rate * 1.5)
-                    for param_group in self.optimizer.param_groups:
-                        param_group["lr"] = self.learning_rate
-
-            # Concurrent state-estimator update (own optimizer, fixed LR). The
-            # target is the same-step privileged block of critic_obs_batch.
-            estimation_loss = self.actor_critic.estimator.update(
-                obs_batch,
-                critic_obs_batch,
-            )
+                self._adapt_learning_rate(float(kl_mean))
 
             ratio = torch.exp(actions_log_prob_batch - torch.squeeze(old_actions_log_prob_batch))
             surrogate = -torch.squeeze(advantages_batch) * ratio
@@ -223,6 +230,17 @@ class CSEPPO:
             loss.backward()
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
             self.optimizer.step()
+
+            # Concurrent state-estimator update AFTER the PPO step (UniFP order:
+            # the adaptation module trains on the just-updated encoder). The
+            # estimator owns its optimizer / fixed LR; its supervised target is
+            # the same-step privileged block of critic_obs_batch. Note the actor
+            # path above feeds a NON-detached latent, so the PPO step already
+            # co-trained the encoder through the shared optimizer.
+            estimation_loss = self.actor_critic.estimator.update(
+                obs_batch,
+                critic_obs_batch,
+            )
 
             mean_value_loss += float(value_loss.item())
             mean_surrogate_loss += float(surrogate_loss.item())

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from types import MethodType
 
 import numpy as np
 import pytest
@@ -170,8 +171,10 @@ def test_pos_force_external_forces_apply_and_observe():
         env_cfg_override={
             "commands": {
                 "force_start_step": 0,
-                "push_gripper_interval_s": [0.1, 0.2],
-                "push_base_interval_s": [0.1, 0.2],
+                "push_gripper_interval_s_cmd": [0.1, 0.2],
+                "push_gripper_interval_s_ext": [0.1, 0.2],
+                "push_base_interval_s_cmd": [0.1, 0.2],
+                "push_base_interval_s_ext": [0.1, 0.2],
                 "gripper_forced_prob_ext": 1.0,
                 "base_forced_prob_ext": 1.0,
             }
@@ -206,3 +209,264 @@ def test_pos_force_no_forces_before_curriculum():
     # No external force before the curriculum start step.
     assert np.all(env._force_ee_world == 0.0)
     assert np.all(env._force_base_world == 0.0)
+
+
+def test_obs_noise_matches_unifp_effective_magnitude():
+    """Observation noise must reproduce UniFP's effective magnitude.
+
+    UniFP adds noise to the ALREADY-SCALED observation, so the effective
+    perturbation equals ``noise_scale * obs_scale`` (with noise_level=1):
+        dof_pos:  noise_scales.dof_pos(0.01) * obs_scales.dof_pos(1.0)  = 0.01
+        dof_vel:  noise_scales.dof_vel(1.5)  * obs_scales.dof_vel(0.05) = 0.075
+    The migrated config over-noised these (0.03 and 0.5 -> 3x / 6.7x too large),
+    which corrupts exactly the proprioception the CSE estimator consumes.
+    """
+    from unilab.envs.locomotion.go2_arm.pos_force import ObsScales, PosForceNoiseConfig
+
+    n = PosForceNoiseConfig()
+    s = ObsScales()
+    assert n.level == pytest.approx(1.0)
+    assert n.scale_joint_angle == pytest.approx(0.01 * s.dof_pos)
+    assert n.scale_joint_vel == pytest.approx(1.5 * s.dof_vel)
+    # Orientation / angular-velocity noise already matched UniFP and must stay put.
+    assert n.scale_orn == pytest.approx(0.05)
+    assert n.scale_ang_vel == pytest.approx(0.2)
+
+
+def test_termination_uses_unifp_roll_pitch_thresholds():
+    """UniFP terminates on |pitch| > 1.0 rad or |roll| > 0.8 rad.
+
+    The migration used ``gravity_z <= 0`` (~90 deg tip on either axis), which lets
+    the robot fall far past UniFP's per-axis Euler limits before terminating and
+    changes the survivable-state set / ``alive`` reward integral.
+    """
+    from types import SimpleNamespace
+
+    from unilab.envs.locomotion.go2_arm.pos_force import Go2ArmPosForceEnv
+
+    def quat_roll(r: float) -> np.ndarray:
+        return np.array([np.cos(r / 2.0), np.sin(r / 2.0), 0.0, 0.0])
+
+    def quat_pitch(p: float) -> np.ndarray:
+        return np.array([np.cos(p / 2.0), 0.0, np.sin(p / 2.0), 0.0])
+
+    quats = np.stack(
+        [
+            np.array([1.0, 0.0, 0.0, 0.0]),  # upright -> alive
+            quat_roll(0.9),  # |roll| 0.9 > 0.8 -> terminate
+            quat_roll(0.7),  # |roll| 0.7 < 0.8 -> alive
+            quat_roll(-0.9),  # roll asymmetry: -0.9 also terminates
+            quat_pitch(1.1),  # |pitch| 1.1 > 1.0 -> terminate
+            quat_pitch(0.9),  # |pitch| 0.9 < 1.0 -> alive (gravity_z<=0 would keep alive too)
+        ]
+    )
+    stub = SimpleNamespace()
+    term = Go2ArmPosForceEnv._compute_terminated(stub, quats)
+    assert term.dtype == bool
+    assert term.tolist() == [False, True, False, True, True, False]
+
+
+def test_force_schedule_hold_is_fixed_settling_independent_of_duration():
+    """UniFP ramps force up over push_duration, HOLDS at peak for a fixed
+    settling_time (gripper 0.5 s, base 1.0 s), then ramps down. The migration
+    made hold ~ push_duration/3, so the peak-hold scaled with the sampled
+    duration and shrank the steady-state force-holding the policy practises.
+
+    Contract: the peak-hold length is governed by ``settling`` and is
+    independent of the sampled ``push_duration``.
+    """
+    from unilab.envs.locomotion.go2_arm.pos_force import _ForceSchedule
+
+    def peak_hold(duration: int, settling: int) -> int:
+        sched = _ForceSchedule(
+            num_envs=1,
+            mag_range=(10.0, 10.0),
+            interval_range=(1, 1),
+            duration_range=(duration, duration),
+            prob=1.0,
+            dtype=np.float64,
+            settling=settling,
+        )
+        peak = 0
+        for _ in range(2 * duration + settling + 5):
+            f = float(sched.step(enabled=True)[0, 0])
+            if np.isclose(f, 10.0):
+                peak += 1
+        return peak
+
+    # Same settling, very different push_duration -> identical peak-hold length.
+    assert peak_hold(duration=5, settling=8) == peak_hold(duration=15, settling=8)
+    # The peak hold lasts at least the configured settling (a sustained hold).
+    assert peak_hold(duration=5, settling=8) >= 8
+    # Longer settling -> strictly longer peak hold (hold is settling-driven).
+    assert peak_hold(duration=5, settling=24) > peak_hold(duration=5, settling=8)
+
+
+def test_force_commands_have_separate_cmd_ext_intervals():
+    """UniFP uses distinct cmd vs ext force-episode intervals (gripper cmd
+    [5,10] / ext [6,12]; base cmd [5,10] / ext [8,14]); the migration collapsed
+    them into one shared interval. Restore the separate fields + settling times.
+    """
+    from unilab.envs.locomotion.go2_arm.pos_force import PosForceCommandsConfig
+
+    c = PosForceCommandsConfig()
+    assert c.push_gripper_interval_s_cmd == [5.0, 10.0]
+    assert c.push_gripper_interval_s_ext == [6.0, 12.0]
+    assert c.push_base_interval_s_cmd == [5.0, 10.0]
+    assert c.push_base_interval_s_ext == [8.0, 14.0]
+    assert c.settling_time_force_gripper_s == pytest.approx(0.5)
+    assert c.settling_time_force_base_s == pytest.approx(1.0)
+
+
+def test_push_is_velocity_impulse_not_force():
+    """UniFP ``_push_robots`` is a base-velocity impulse (max_push_vel_xy=0.3 m/s),
+    not the 0.3 N ``xfrc`` no-op the migration shipped (0.3 N on a ~15 kg base is
+    imperceptible). The shared force-based interval push must be disabled.
+    """
+    from unilab.envs.locomotion.go2_arm.pos_force import PosForceDomainRandConfig
+
+    dr = PosForceDomainRandConfig()
+    assert dr.velocity_push is True
+    assert dr.max_push_vel_xy == pytest.approx(0.3)
+    # build_interval_push_plan / validate_interval_push_support both gate on
+    # push_robots; keeping it False disables the force-based no-op.
+    assert dr.push_robots is False
+    assert not hasattr(dr, "max_force")
+
+
+def test_velocity_push_sets_base_velocity_with_standing_amplification():
+    """The push overwrites base x/y linear velocity (UniFP root_states[:,7:9]),
+    leaves z untouched, and amplifies standing (zero-velocity-command) envs 2.5x.
+    """
+    from types import SimpleNamespace
+
+    from unilab.envs.locomotion.go2_arm.pos_force import (
+        Go2ArmPosForceEnv,
+        PosForceCommandsConfig,
+        PosForceDomainRandConfig,
+    )
+
+    np.random.seed(0)
+    n = 2000
+    base_vel = np.zeros((n, 3), dtype=np.float64)
+    dr = PosForceDomainRandConfig()
+    stub = SimpleNamespace(
+        _num_envs=n,
+        _np_dtype=np.float64,
+        step_counter=dr.push_interval,  # divisible -> push fires
+        _backend=SimpleNamespace(get_base_lin_vel=lambda: base_vel),
+        _cfg=SimpleNamespace(domain_rand=dr, commands=PosForceCommandsConfig()),
+    )
+    stub._command_is_moving = MethodType(Go2ArmPosForceEnv._command_is_moving, stub)
+
+    commands = np.zeros((n, 15), dtype=np.float64)
+    commands[n // 2 :, 0] = 1.0  # second half moving in x; first half standing
+    Go2ArmPosForceEnv._maybe_apply_velocity_push(stub, commands)
+
+    assert np.any(base_vel[:, 0:2] != 0.0)  # a real velocity impulse, not a no-op
+    assert np.all(base_vel[:, 2] == 0.0)  # vertical velocity untouched
+    moving_max = float(np.abs(base_vel[n // 2 :, 0:2]).max())
+    standing_max = float(np.abs(base_vel[: n // 2, 0:2]).max())
+    assert moving_max <= dr.max_push_vel_xy + 1e-9
+    assert standing_max > dr.max_push_vel_xy  # 2.5x amplification exceeds the base bound
+    assert standing_max <= 2.5 * dr.max_push_vel_xy + 1e-9
+
+
+def test_velocity_push_only_fires_on_interval():
+    """No push on steps that are not multiples of push_interval."""
+    from types import SimpleNamespace
+
+    from unilab.envs.locomotion.go2_arm.pos_force import (
+        Go2ArmPosForceEnv,
+        PosForceCommandsConfig,
+        PosForceDomainRandConfig,
+    )
+
+    n = 4
+    base_vel = np.zeros((n, 3), dtype=np.float64)
+    dr = PosForceDomainRandConfig()
+    stub = SimpleNamespace(
+        _num_envs=n,
+        _np_dtype=np.float64,
+        step_counter=dr.push_interval + 1,  # NOT divisible -> no push
+        _backend=SimpleNamespace(get_base_lin_vel=lambda: base_vel),
+        _cfg=SimpleNamespace(domain_rand=dr, commands=PosForceCommandsConfig()),
+    )
+    stub._command_is_moving = MethodType(Go2ArmPosForceEnv._command_is_moving, stub)
+    Go2ArmPosForceEnv._maybe_apply_velocity_push(stub, np.zeros((n, 15)))
+    assert np.all(base_vel == 0.0)
+
+
+def test_foot_friction_dr_randomizes_feet():
+    """The foot geom has priority=1, so the ground-friction DR never reaches the
+    contact (it scales the floor, which the foot overrides). The FOOT friction
+    must itself be randomized per-env in [0.5, 1.8] (matching UniFP's per-env
+    foot-shape friction): all 4 feet share one per-env value, non-foot geoms
+    untouched.
+    """
+    from types import SimpleNamespace
+
+    from unilab.envs.locomotion.go2_arm.pos_force import (
+        Go2ArmPosForceEnv,
+        PosForceDomainRandConfig,
+    )
+
+    np.random.seed(0)
+    n, ngeom = 32, 40
+    foot_ids = np.array([5, 9, 13, 17])
+    base = np.tile(np.array([0.8, 0.02, 0.01]), (ngeom, 1))
+    payload = SimpleNamespace(geom_friction=np.broadcast_to(base, (n, ngeom, 3)).copy())
+    dr = PosForceDomainRandConfig()
+    stub = SimpleNamespace(
+        _num_envs=n,
+        _np_dtype=np.float64,
+        _foot_geom_ids=foot_ids,
+        _base_geom_friction_full=base.copy(),
+        _cfg=SimpleNamespace(domain_rand=dr),
+    )
+    Go2ArmPosForceEnv._apply_foot_friction_dr(stub, payload, np.arange(n, dtype=np.int32))
+
+    assert dr.randomize_foot_friction is True
+    assert dr.foot_friction_range == [0.5, 1.8]
+    ff = payload.geom_friction[:, foot_ids, 0]
+    assert ff.std() > 0.05  # varies across envs (not the fixed 0.8 no-op)
+    assert ff.min() >= 0.5 - 1e-9 and ff.max() <= 1.8 + 1e-9
+    assert np.allclose(ff, ff[:, :1])  # all 4 feet share one per-env bucket
+    other = np.setdiff1d(np.arange(ngeom), foot_ids)
+    assert np.allclose(payload.geom_friction[:, other, 0], 0.8)  # non-foot untouched
+
+
+@pytest.mark.slow
+def test_foot_friction_varies_across_envs_after_reset():
+    """End-to-end: after reset the per-env foot friction (privileged readback)
+    actually varies in [0.5, 1.8] — the DR now reaches the feet."""
+    _skip_if_no_mujoco()
+    env = _make_env(num_envs=8)
+    env.init_state()
+    fr = env._dr_friction[:, 0]
+    assert fr.min() >= 0.5 - 1e-6
+    assert fr.max() <= 1.8 + 1e-6
+    assert fr.std() > 0.05  # genuinely varies across envs (not fixed 0.8)
+
+
+@pytest.mark.slow
+def test_velocity_push_perturbs_base_in_sim():
+    """End-to-end: the in-env velocity write reaches the physics state and moves
+    the base (the old 0.3 N xfrc force was a near-no-op)."""
+    _skip_if_no_mujoco()
+    env = _make_env(
+        num_envs=4,
+        env_cfg_override={
+            "domain_rand": {
+                "velocity_push": True,
+                "push_interval": 1,  # push every control step
+                "max_push_vel_xy": 2.0,  # large, unambiguous impulse
+            }
+        },
+    )
+    env.init_state()
+    max_speed = 0.0
+    for _ in range(8):
+        env.step(np.zeros((4, 18), dtype=np.float64))
+        max_speed = max(max_speed, float(np.abs(env._backend.get_base_lin_vel()[:, 0:2]).max()))
+    assert max_speed > 0.5
