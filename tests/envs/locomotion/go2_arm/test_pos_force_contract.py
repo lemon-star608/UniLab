@@ -397,6 +397,22 @@ def test_velocity_push_only_fires_on_interval():
     assert np.all(base_vel == 0.0)
 
 
+def test_soft_dof_pos_limits_shrinks_to_middle_fraction():
+    """UniFP penalizes dof_pos against SOFT limits = the middle ``soft`` fraction
+    of each joint range (m +/- 0.5*r*soft). The migration used the hard limits
+    (soft_dof_pos_limit was dead), so the -10 penalty triggered too late.
+    """
+    from unilab.envs.locomotion.go2_arm.pos_force import _soft_dof_pos_limits
+
+    hard = np.array([[-1.0, 1.0], [0.0, 2.0], [-3.0, 1.0]])  # ranges 2, 2, 4
+    soft = _soft_dof_pos_limits(hard, 0.8)
+    # middle 80% about each midpoint (mid 0/1/-1, half-range 1/1/2)
+    assert np.allclose(soft, [[-0.8, 0.8], [0.2, 1.8], [-2.6, 0.6]])
+    # soft=1.0 -> unchanged (hard); narrower for soft<1
+    assert np.allclose(_soft_dof_pos_limits(hard, 1.0), hard)
+    assert (soft[:, 1] - soft[:, 0] < hard[:, 1] - hard[:, 0]).all()
+
+
 def test_foot_friction_dr_randomizes_feet():
     """The foot geom has priority=1, so the ground-friction DR never reaches the
     contact (it scales the floor, which the foot overrides). The FOOT friction
@@ -434,6 +450,20 @@ def test_foot_friction_dr_randomizes_feet():
     assert np.allclose(ff, ff[:, :1])  # all 4 feet share one per-env bucket
     other = np.setdiff1d(np.arange(ngeom), foot_ids)
     assert np.allclose(payload.geom_friction[:, other, 0], 0.8)  # non-foot untouched
+
+
+@pytest.mark.slow
+def test_dof_pos_limits_are_soft_not_hard():
+    """End-to-end: the env's dof_pos_limits are the soft (middle 0.8) limits,
+    strictly inside the model's hard joint range."""
+    _skip_if_no_mujoco()
+    from unilab.envs.locomotion.go2_arm.pos_force import _soft_dof_pos_limits
+
+    env = _make_env(num_envs=1)
+    soft = env._dof_pos_limits
+    hard = np.asarray(env._backend.get_joint_range(), dtype=soft.dtype)[:18]
+    assert np.allclose(soft, _soft_dof_pos_limits(hard, 0.8))
+    assert (soft[:, 1] - soft[:, 0] < hard[:, 1] - hard[:, 0] - 1e-9).all()
 
 
 @pytest.mark.slow

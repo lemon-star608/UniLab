@@ -229,6 +229,21 @@ def test_lr_adaptation_respects_configurable_clamp():
     assert alg.learning_rate == pytest.approx(1e-2)
 
 
+def test_policy_std_is_clamped_positive():
+    """The action-noise std is an unconstrained Parameter used as the Normal
+    scale; a low entropy_coef + aggressive update can drive it <= 0, crashing
+    ``Normal()`` ("std >= 0.0"). It must be clamped to a positive floor.
+    """
+    from unilab.algos.torch.cse_ppo.algorithm import CSEPPO
+
+    ac = _make_actor_critic(history=4, one_step=10, latent=8)
+    alg = CSEPPO(ac, min_policy_std=1e-2)
+    ac.std.data.fill_(-0.5)  # simulate a bad optimizer step that overshot past 0
+    alg._clamp_policy_std()
+    assert bool((ac.std.data >= 1e-2 - 1e-9).all())
+    assert bool(torch.isfinite(ac.std.data).all())
+
+
 def test_actor_input_width_matches_task_architecture():
     """Task config uses latent_dim=64 (history x 2); actor input = one_step + latent."""
     ac = CSEActorCritic(

@@ -37,6 +37,7 @@ class CSEPPO:
         desired_kl: float | None = 0.01,
         min_learning_rate: float = 1e-5,
         max_learning_rate: float = 1e-2,
+        min_policy_std: float = 1e-2,
         device: str = "cpu",
         **kwargs: Any,
     ) -> None:
@@ -47,6 +48,7 @@ class CSEPPO:
         self.learning_rate = float(learning_rate)
         self.min_learning_rate = float(min_learning_rate)
         self.max_learning_rate = float(max_learning_rate)
+        self.min_policy_std = float(min_policy_std)
 
         self.actor_critic = actor_critic
         self.actor_critic.to(self.device)
@@ -162,6 +164,16 @@ class CSEPPO:
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = self.learning_rate
 
+    def _clamp_policy_std(self) -> None:
+        """Keep the action-noise std strictly positive.
+
+        ``actor_critic.std`` is a raw, unconstrained Parameter used directly as
+        the Normal scale; a low ``entropy_coef`` plus an aggressive update can
+        drive it <= 0, which crashes ``Normal()`` ("std >= 0.0"). Clamp it to a
+        small positive floor after every optimizer step.
+        """
+        self.actor_critic.std.data.clamp_(min=self.min_policy_std)
+
     def update(self) -> tuple[float, float, float]:
         assert self.storage is not None
         mean_value_loss = 0.0
@@ -230,6 +242,7 @@ class CSEPPO:
             loss.backward()
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
             self.optimizer.step()
+            self._clamp_policy_std()
 
             # Concurrent state-estimator update AFTER the PPO step (UniFP order:
             # the adaptation module trains on the just-updated encoder). The

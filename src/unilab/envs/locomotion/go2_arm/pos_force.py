@@ -101,6 +101,16 @@ def _roll_pitch_from_quat(quat: np.ndarray) -> np.ndarray:
     return np.stack([roll, pitch], axis=1)
 
 
+def _soft_dof_pos_limits(hard: np.ndarray, soft: float) -> np.ndarray:
+    """Shrink hard joint limits to the middle ``soft`` fraction about each midpoint
+    (UniFP ``_process_dof_props``): ``[m - 0.5*r*soft, m + 0.5*r*soft]``."""
+    lower = hard[:, 0]
+    upper = hard[:, 1]
+    mid = (lower + upper) / 2.0
+    half_range = (upper - lower) / 2.0
+    return np.stack([mid - half_range * soft, mid + half_range * soft], axis=1)
+
+
 class _ForceSchedule:
     """Per-env trapezoidal force episodes (ramp up -> hold -> ramp down).
 
@@ -617,7 +627,13 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         joint_range = self._backend.get_joint_range()
         if joint_range is None:
             raise ValueError("backend.get_joint_range() returned None; required for dof_pos_limits")
-        self._dof_pos_limits = np.asarray(joint_range, dtype=dtype)[:NUM_ACTIONS]
+        # UniFP penalizes dof_pos against SOFT limits (middle soft_dof_pos_limit
+        # of each range), not the hard joint limits, so the -10 penalty bites
+        # earlier. _reward_dof_pos_limits reads these.
+        hard_dof_pos_limits = np.asarray(joint_range, dtype=dtype)[:NUM_ACTIONS]
+        self._dof_pos_limits = _soft_dof_pos_limits(
+            hard_dof_pos_limits, self._reward_cfg.soft_dof_pos_limit
+        )
 
         # Force application bodies (resolved once, cold path).
         self._ee_body_id = int(self._backend.get_body_ids([cfg.asset.ee_body_name])[0])

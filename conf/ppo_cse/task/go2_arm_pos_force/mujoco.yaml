@@ -13,10 +13,10 @@ algo:
   policy:
     init_noise_std: 1.0
   algorithm:
-    learning_rate: 5.0e-4       # ③ lower init LR to avoid early KL spike flooring it
-    entropy_coef: 5.0e-3        # ② let action std anneal (smoother actions)
-    num_learning_epochs: 3      # ① fewer epochs/rollout -> smaller KL, steadier LR
-    desired_kl: 0.02            # ⑤ looser KL target -> controller keeps LR higher
+    learning_rate: 1.0e-3       # ⑥ gentler init LR -> less early overshoot
+    entropy_coef: 1.0e-2        # ⑥ UniFP value: keeps action std positive (5e-3 -> std<=0 crash)
+    num_learning_epochs: 5      # ① fewer epochs/rollout -> smaller KL, steadier LR
+    desired_kl: 0.01            # ⑤ looser KL target -> controller keeps LR higher
     min_learning_rate: 5.0e-5   # ⑤ raise adaptive-LR floor (was 1e-5) so late training keeps moving
   estimator:
     target_start: 0             # CSE targets at the front of the 1-step critic obs
@@ -65,7 +65,7 @@ reward:
     base_height: -2.0
     hip_pos: -0.5
     feet_pos_xy: -0.5
-    feet_drag: -1.2e-3          # ④ press harder against foot sliding under load
+    feet_drag: -8e-4          # ④ press harder against foot sliding under load
     feet_contact_forces: -1.0e-3
     collision: -5.0
     dof_pos_limits: -10.0
@@ -81,11 +81,12 @@ env:
     init_pos_start: [0.5, 0.7853981633974483, 0.0]  # [0.5, pi/4, 0] (UniFP)
     pos_l: [0.25, 0.6]
   control_config:
-    action_delay_steps: 3
+    action_delay_steps: 0   # C2: UniFP's action_delay is dead config (zero actual
+                            # delay); match it. Re-add (3) before real-robot deploy.
   commands:
     force_start_step: 96000    # ③ control steps = 4000 iters x 24 (forces on at ~iter 3000)
     zero_vel_cmd_prob_after_force: 0.8
-    force_z_base_ext_scale: 0.2   # ④ was 0.05; train vertical base disturbance rejection
+    force_z_base_ext_scale: 0.05   # ④ was 0.05; train vertical base disturbance rejection
     # ① denser ext force events -> more estimator signal + more disturbance practice.
     # Intervals are now per-channel (UniFP separates cmd vs ext); this densified
     # retune is applied to both channels per body. The fixed settling-time hold
