@@ -169,9 +169,15 @@ def _expand_gain(
     gain = np.asarray(raw_value, dtype=np.float64)
     if gain.ndim == 0:
         return np.full((size,), float(gain), dtype=np.float64)
-    if gain.shape != (size,):
-        raise ValueError(f"{name} must be a scalar or have shape ({size},), got {gain.shape}")
-    return gain
+    if gain.shape == (size,):
+        return gain
+    # Per-joint group spec (e.g. length-3 hip/thigh/calf) tiled across the limb,
+    # so a quadruped leg can take [hip, thigh, calf] and repeat it per leg (A2).
+    if gain.ndim == 1 and gain.shape[0] != 0 and size % gain.shape[0] == 0:
+        return np.tile(gain, size // gain.shape[0])
+    raise ValueError(
+        f"{name} must be a scalar, shape ({size},), or a length dividing {size}; got {gain.shape}"
+    )
 
 
 def build_go2_arm_position_gains(cfg: ControlConfig) -> dict[str, np.ndarray]:

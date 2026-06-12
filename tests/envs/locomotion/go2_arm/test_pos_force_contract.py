@@ -60,7 +60,7 @@ def _default_reward_cfg(**overrides):
             "action_rate_arm": -0.045,
         },
         tracking_sigma=0.25,
-        base_height_target=0.40,
+        base_height_target=0.45,
     )
     cfg.update(overrides)
     return RewardConfig(**cfg)
@@ -161,6 +161,25 @@ def test_pos_force_torque_within_limits():
         env.step(np.zeros((2, 18), dtype=np.float64))
     # Python PD torque must respect the per-joint limits (legs/j1-3 24, wrist 8).
     assert np.all(np.abs(env._last_torque) <= env._torque_limits + 1e-6)
+
+
+@pytest.mark.slow
+def test_clip_actions_and_obs_bound_runaway():
+    """UniFP ±100 clamps (clip_actions / clip_observations): a blown-up policy
+    (huge actions) must not poison the obs (last_actions block) or the action_rate
+    reward — the safety valve that prevents the feedback runaway that drove early
+    A2 training to value-loss=inf and the std>=0 crash."""
+    _skip_if_no_mujoco()
+    env = _make_env(num_envs=2)
+    assert env._clip_actions == 100.0 and env._clip_obs == 100.0
+    env.init_state()
+    state = env.step(np.full((2, 18), 1.0e6, dtype=np.float64))
+    # raw action clamped BEFORE it enters obs / action_rate reward
+    assert np.all(np.abs(state.info["current_actions"]) <= 100.0 + 1e-6)
+    # actor + critic obs bounded (no 1e6 leaking via the last_actions block)
+    assert np.all(np.abs(state.obs["obs"]) <= 100.0 + 1e-6)
+    assert np.all(np.abs(state.obs["critic"]) <= 100.0 + 1e-6)
+    assert np.isfinite(state.reward).all()
 
 
 @pytest.mark.slow
@@ -334,22 +353,16 @@ def test_push_is_velocity_impulse_not_force():
     assert not hasattr(dr, "max_force")
 
 
-def test_velocity_push_sets_base_velocity_with_standing_amplification():
-    """The push overwrites base x/y linear velocity (UniFP root_states[:,7:9]),
-    leaves z untouched, and amplifies standing (zero-velocity-command) envs 2.5x.
-    """
+def _velocity_push_stub(dr):
     from types import SimpleNamespace
 
     from unilab.envs.locomotion.go2_arm.pos_force import (
         Go2ArmPosForceEnv,
         PosForceCommandsConfig,
-        PosForceDomainRandConfig,
     )
 
-    np.random.seed(0)
     n = 2000
     base_vel = np.zeros((n, 3), dtype=np.float64)
-    dr = PosForceDomainRandConfig()
     stub = SimpleNamespace(
         _num_envs=n,
         _np_dtype=np.float64,
@@ -358,17 +371,41 @@ def test_velocity_push_sets_base_velocity_with_standing_amplification():
         _cfg=SimpleNamespace(domain_rand=dr, commands=PosForceCommandsConfig()),
     )
     stub._command_is_moving = MethodType(Go2ArmPosForceEnv._command_is_moving, stub)
-
     commands = np.zeros((n, 15), dtype=np.float64)
     commands[n // 2 :, 0] = 1.0  # second half moving in x; first half standing
     Go2ArmPosForceEnv._maybe_apply_velocity_push(stub, commands)
-
-    assert np.any(base_vel[:, 0:2] != 0.0)  # a real velocity impulse, not a no-op
-    assert np.all(base_vel[:, 2] == 0.0)  # vertical velocity untouched
     moving_max = float(np.abs(base_vel[n // 2 :, 0:2]).max())
     standing_max = float(np.abs(base_vel[: n // 2, 0:2]).max())
+    return base_vel, moving_max, standing_max
+
+
+def test_velocity_push_standing_scale_defaults_to_unifp_1x():
+    """The push overwrites base x/y velocity; the standing amplification defaults
+    to 1.0 -- UniFP's _push_robots 2.5x branch is dead code (effectively 1x), so
+    standing envs are NOT amplified by default."""
+    from unilab.envs.locomotion.go2_arm.pos_force import PosForceDomainRandConfig
+
+    np.random.seed(0)
+    dr = PosForceDomainRandConfig()
+    assert dr.velocity_push_standing_scale == pytest.approx(1.0)
+    base_vel, moving_max, standing_max = _velocity_push_stub(dr)
+    assert np.any(base_vel[:, 0:2] != 0.0)  # a real velocity impulse, not a no-op
+    assert np.all(base_vel[:, 2] == 0.0)  # vertical velocity untouched
+    # 1x: standing is NOT amplified -> both bounded by vmax
     assert moving_max <= dr.max_push_vel_xy + 1e-9
-    assert standing_max > dr.max_push_vel_xy  # 2.5x amplification exceeds the base bound
+    assert standing_max <= dr.max_push_vel_xy + 1e-9
+
+
+def test_velocity_push_standing_scale_amplifies_when_configured():
+    """Setting velocity_push_standing_scale > 1 amplifies standing-env pushes."""
+    from unilab.envs.locomotion.go2_arm.pos_force import PosForceDomainRandConfig
+
+    np.random.seed(0)
+    dr = PosForceDomainRandConfig()
+    dr.velocity_push_standing_scale = 2.5
+    _, moving_max, standing_max = _velocity_push_stub(dr)
+    assert moving_max <= dr.max_push_vel_xy + 1e-9
+    assert standing_max > dr.max_push_vel_xy  # amplified beyond the base bound
     assert standing_max <= 2.5 * dr.max_push_vel_xy + 1e-9
 
 
@@ -411,6 +448,28 @@ def test_soft_dof_pos_limits_shrinks_to_middle_fraction():
     # soft=1.0 -> unchanged (hard); narrower for soft<1
     assert np.allclose(_soft_dof_pos_limits(hard, 1.0), hard)
     assert (soft[:, 1] - soft[:, 0] < hard[:, 1] - hard[:, 0]).all()
+
+
+def test_leg_torque_limit_accepts_per_joint_list():
+    """A2 has non-uniform leg torque limits (hip/thigh 120, calf 180). The env must
+    accept a length-3 per-leg spec (tiled x4) and a full length-12 list, not only a scalar."""
+    from unilab.envs.locomotion.go2_arm.pos_force import _expand_leg_torque_limit
+
+    assert np.allclose(_expand_leg_torque_limit(24.0), np.full(12, 24.0))
+    assert np.allclose(_expand_leg_torque_limit([120.0, 120.0, 180.0]), [120, 120, 180] * 4)
+    full = list(range(12))
+    assert np.allclose(_expand_leg_torque_limit(full), full)
+
+
+def test_expand_gain_tiles_per_leg_spec():
+    """A2 leg PD gains are per-joint (hip/thigh/calf). _expand_gain must tile a length-3
+    spec across the 12 leg joints, while leaving scalars and exact-size lists unchanged."""
+    from unilab.envs.locomotion.go2_arm.base import _expand_gain
+
+    assert np.allclose(_expand_gain("leg_kp", 60.0, 35.0, 12), np.full(12, 60.0))
+    assert np.allclose(_expand_gain("leg_kp", [100.0, 100.0, 150.0], 35.0, 12), [100, 100, 150] * 4)
+    arm = [95.0, 115.0, 100.0, 52.0, 54.0, 55.0]
+    assert np.allclose(_expand_gain("arm_kp", arm, 35.0, 6), arm)
 
 
 def test_foot_friction_dr_randomizes_feet():

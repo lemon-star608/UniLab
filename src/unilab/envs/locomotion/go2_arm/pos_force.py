@@ -45,6 +45,7 @@ from unilab.envs.common.rotation import (
 from unilab.envs.locomotion.common.dr_provider import LocomotionDRProvider
 from unilab.envs.locomotion.common.rewards import RewardContext, run_reward_dispatch
 from unilab.envs.locomotion.go2_arm.base import (
+    Asset,
     Go2ArmBaseCfg,
     Go2ArmBaseEnv,
     Go2ArmSensor,
@@ -109,6 +110,22 @@ def _soft_dof_pos_limits(hard: np.ndarray, soft: float) -> np.ndarray:
     mid = (lower + upper) / 2.0
     half_range = (upper - lower) / 2.0
     return np.stack([mid - half_range * soft, mid + half_range * soft], axis=1)
+
+
+def _expand_leg_torque_limit(value: float | list[float]) -> np.ndarray:
+    """Expand a leg torque-limit spec to a ``(NUM_LEG,)`` array. Accepts a scalar
+    (uniform), a length-3 per-leg ``(hip, thigh, calf)`` spec tiled across 4 legs,
+    or a full ``length-NUM_LEG`` list used as-is (A2: hip/thigh 120, calf 180)."""
+    arr = np.asarray(value, dtype=np.float64)
+    if arr.ndim == 0:
+        return np.full((NUM_LEG,), float(arr), dtype=np.float64)
+    if arr.shape == (3,):
+        return np.tile(arr, 4)
+    if arr.shape == (NUM_LEG,):
+        return arr
+    raise ValueError(
+        f"leg_torque_limit must be a scalar, length-3, or length-{NUM_LEG}; got shape {arr.shape}"
+    )
 
 
 class _ForceSchedule:
@@ -331,8 +348,9 @@ class PosForceCommandsConfig:
     base_force_kd: float = 200.0
     # UniFP attenuates the external base force's vertical component to 5%.
     force_z_base_ext_scale: float = 0.05
-    # Force curriculum: external forces start after this many control steps.
-    force_start_step: int = 6000
+    # Force curriculum: external forces start after this many CONTROL steps.
+    # UniFP starts at iteration 6000 = 6000 * num_steps_per_env(24) = 144000.
+    force_start_step: int = 144000
 
 
 @dataclass
@@ -345,12 +363,12 @@ class PosForceControlConfig:
     # PD gains (UniFP go2arm); reused via build_go2_arm_position_gains.
     Kp: float = 35.0
     Kd: float = 0.5
-    leg_kp: float = 60.0
-    leg_kd: float = 2.0
+    leg_kp: float | list[float] = 60.0
+    leg_kd: float | list[float] = 2.0
     arm_kp: list[float] = field(default_factory=lambda: [95.0, 115.0, 100.0, 52.0, 54.0, 55.0])
     arm_kd: list[float] = field(default_factory=lambda: [3.5, 3.8, 2.5, 1.5, 1.5, 1.5])
     # Per-joint torque limits (legs + joint1-3: 24 Nm, wrist joint4-6: 8 Nm).
-    leg_torque_limit: float = 24.0
+    leg_torque_limit: float | list[float] = 24.0
     arm_torque_limit: list[float] = field(default_factory=lambda: [24.0, 24.0, 24.0, 8.0, 8.0, 8.0])
 
 
@@ -389,6 +407,10 @@ class PosForceDomainRandConfig:
     velocity_push: bool = True
     push_interval: int = 400
     max_push_vel_xy: float = 0.3
+    # Standing-env push amplification. UniFP's _push_robots multiplies by 2.5 when
+    # commands.sum()==0, but that condition never holds (EE radius is always
+    # nonzero), so UniFP's actual behavior is 1x. Default 1.0 = UniFP-faithful.
+    velocity_push_standing_scale: float = 1.0
     push_body_name: str = "base"
 
 
@@ -441,6 +463,11 @@ class Go2ArmPosForceCfg(Go2ArmBaseCfg):
     max_episode_seconds: float = 20.0
     sim_dt: float = 0.005
     ctrl_dt: float = 0.02
+    # UniFP normalization clamps: cap the raw action and the final observation,
+    # preventing the action_rate / obs feedback runaway when a policy update
+    # overshoots (the divergence that crashed early A2 training). None disables.
+    clip_actions: float | None = 100.0
+    clip_observations: float | None = 100.0
     obs_scales: ObsScales = field(default_factory=ObsScales)
     noise_config: PosForceNoiseConfig = field(default_factory=PosForceNoiseConfig)  # type: ignore[assignment]
     control_config: PosForceControlConfig = field(default_factory=PosForceControlConfig)  # type: ignore[assignment]
@@ -558,6 +585,9 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         dtype = get_global_dtype()
         self._np_dtype = dtype
         self._gravity_sensor = "upvector"
+        # UniFP ±100 action/observation clamps (None disables either).
+        self._clip_actions = None if cfg.clip_actions is None else float(cfg.clip_actions)
+        self._clip_obs = None if cfg.clip_observations is None else float(cfg.clip_observations)
         self._reward_cfg = cfg.reward_config
         self._enable_reward_log = True
 
@@ -567,7 +597,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         self._kd = gains["kd"].astype(np.float64)
         self._torque_limits = np.concatenate(
             [
-                np.full((NUM_LEG,), cfg.control_config.leg_torque_limit, dtype=np.float64),
+                _expand_leg_torque_limit(cfg.control_config.leg_torque_limit),
                 np.asarray(cfg.control_config.arm_torque_limit, dtype=np.float64),
             ]
         )
@@ -1055,6 +1085,8 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
 
     def apply_action(self, actions: np.ndarray, state: NpEnvState) -> np.ndarray:
         actions = np.asarray(actions, dtype=self._np_dtype)
+        if self._clip_actions is not None:
+            actions = np.clip(actions, -self._clip_actions, self._clip_actions)
         state.info["last_actions"] = state.info.get("current_actions", np.zeros_like(actions))
         state.info["current_actions"] = actions
         # The applied (executed) action is delayed; the policy's raw current/last
@@ -1103,10 +1135,11 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
 
         Every ``push_interval`` control steps, overwrite the base horizontal
         linear velocity with ``U(-max_push_vel_xy, max_push_vel_xy)`` (world
-        frame, matching Isaac ``root_states[:, 7:9]``), amplified 2.5x for envs
-        whose velocity command is ~zero (a harder standing-recovery test). The
-        write lands in the authoritative physics state and is consumed by the
-        next physics substep, so it acts as a one-shot velocity impulse.
+        frame, matching Isaac ``root_states[:, 7:9]``), scaled by
+        ``velocity_push_standing_scale`` for envs whose velocity command is ~zero
+        (1.0 = UniFP-faithful). The write lands in the authoritative physics
+        state and is consumed by the next physics substep, so it acts as a
+        one-shot velocity impulse.
         """
         dr = self._cfg.domain_rand
         if not dr.velocity_push or dr.push_interval <= 0:
@@ -1115,9 +1148,9 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
             return
         vmax = float(dr.max_push_vel_xy)
         vel = np.random.uniform(-vmax, vmax, size=(self._num_envs, 2)).astype(self._np_dtype)
-        if commands is not None:
+        if commands is not None and dr.velocity_push_standing_scale != 1.0:
             standing = ~self._command_is_moving(commands)
-            vel[standing] *= 2.5
+            vel[standing] *= float(dr.velocity_push_standing_scale)
         self._backend.get_base_lin_vel()[:, 0:2] = vel
 
     def _reset_force_schedules(self, env_ids: np.ndarray) -> None:
@@ -1379,6 +1412,17 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         )
         return actor_raw, critic_raw
 
+    def _clip_obs_dict(self, buf_a: np.ndarray, buf_c: np.ndarray) -> dict[str, np.ndarray]:
+        """Return the obs/critic dict with UniFP's ±clip_observations clamp applied.
+
+        Clamps the OUTPUT only; the stored history buffers keep raw values and are
+        re-clamped on the next read, matching UniFP's per-step ``clip(obs_buf)``.
+        """
+        if self._clip_obs is not None:
+            lo, hi = -self._clip_obs, self._clip_obs
+            return {"obs": np.clip(buf_a, lo, hi), "critic": np.clip(buf_c, lo, hi)}
+        return {"obs": np.array(buf_a), "critic": np.array(buf_c)}
+
     def _update_history(
         self, actor_raw: np.ndarray, critic_raw: np.ndarray, env_ids: np.ndarray
     ) -> dict[str, np.ndarray]:
@@ -1408,7 +1452,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
                 buf_c[:, :c_dim] = critic_raw
             else:
                 buf_c[:] = critic_raw
-            return {"obs": buf_a.copy(), "critic": buf_c.copy()}
+            return self._clip_obs_dict(buf_a, buf_c)
         # Reset / partial path: original scatter semantics for an env_ids subset.
         buf_a = self._history_obs_buf[env_ids]
         buf_c = self._history_critic_buf[env_ids]
@@ -1424,7 +1468,7 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
             buf_c = critic_raw
         self._history_obs_buf[env_ids] = buf_a
         self._history_critic_buf[env_ids] = buf_c
-        return {"obs": buf_a.copy(), "critic": buf_c.copy()}
+        return self._clip_obs_dict(buf_a, buf_c)
 
     # ── rewards ───────────────────────────────────────────────────────────
 
@@ -1666,3 +1710,67 @@ class Go2ArmPosForceEnv(Go2ArmBaseEnv):
         forces = np.linalg.norm(self._get_foot_force_vec(), axis=2)
         over = np.clip(forces - self._reward_cfg.max_contact_force, 0.0, None)
         return np.sum(over, axis=1).astype(self._np_dtype)
+
+
+# ── A2 + Airbot variant ──────────────────────────────────────────────────────
+# Same isomorphic task on the Unitree A2 quadruped (heavier ~19.6 kg base, taller,
+# stronger legs). The A2 MJCF mirrors the Go2 sensor/geom/leg-ordering contract,
+# so the env logic is reused unchanged; only robot-physics defaults differ here.
+# Reward weights + force curriculum live in the task YAML, like Go2.
+
+
+def _a2_default_model_file() -> str:
+    return str(ASSETS_ROOT_PATH / "robots" / "a2_arm" / "scene_pos_force.xml")
+
+
+def _a2_default_scene() -> SceneCfg:
+    return SceneCfg(model_file=_a2_default_model_file())
+
+
+@registry.envcfg("A2ArmPosForce")
+@dataclass
+class A2ArmPosForceCfg(Go2ArmPosForceCfg):
+    scene: SceneCfg = field(default_factory=_a2_default_scene)
+    model_file: str = field(default_factory=_a2_default_model_file)
+    asset: Asset = field(default_factory=lambda: Asset(base_name="base_link"))
+    control_config: PosForceControlConfig = field(  # type: ignore[assignment]
+        default_factory=lambda: PosForceControlConfig(
+            # A2 legs are far stronger than Go2's (±120/180 Nm vs ±24); user-tuned.
+            leg_kp=[100.0, 100.0, 150.0],
+            leg_kd=[4.0, 4.0, 6.0],
+            leg_torque_limit=[120.0, 120.0, 180.0],
+        )
+    )
+    goal_ee: GoalEEConfig = field(
+        # EE-goal sphere centred higher: A2 arm base sits ~0.46 m above the feet
+        # (vs Go2 ~0.40); 0.67 reproduces Go2's centre-to-armbase delta of +0.205.
+        default_factory=lambda: GoalEEConfig(sphere_center=SphereCenter(z_invariant_offset=0.67))
+    )
+    gait: GaitConfig = field(
+        # Longer A2 legs -> slightly slower stride, larger swing amplitude.
+        default_factory=lambda: GaitConfig(cycle_time=0.70, target_joint_pos_scale=0.18)
+    )
+    domain_rand: PosForceDomainRandConfig = field(
+        default_factory=lambda: PosForceDomainRandConfig(
+            push_body_name="base_link",
+            added_mass_range=[0.0, 8.0],
+            com_offset_x=[-0.08, 0.08],
+            com_offset_y=[-0.08, 0.08],
+            com_offset_z=[-0.08, 0.08],
+        )
+    )
+    commands: PosForceCommandsConfig = field(
+        # Heavier base -> larger base force commands for comparable disturbance.
+        default_factory=lambda: PosForceCommandsConfig(
+            max_push_force_xyz_base_cmd=[-60.0, 60.0],
+            max_push_force_xyz_base_ext=[-50.0, 50.0],
+        )
+    )
+
+
+@registry.env("A2ArmPosForce", sim_backend="mujoco")
+class A2ArmPosForceEnv(Go2ArmPosForceEnv):
+    """A2 + Airbot pos-force task. Identical logic to Go2ArmPosForceEnv; the A2
+    MJCF mirrors the Go2 sensor/geom/ordering contract, so only the config differs."""
+
+    _cfg: A2ArmPosForceCfg
