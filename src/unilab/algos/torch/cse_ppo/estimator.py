@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Sequence
 from typing import cast
 
@@ -161,6 +162,8 @@ class CSEEstimator(nn.Module):
         obs_history: torch.Tensor,
         critic_obs: torch.Tensor,
         lr: float | None = None,
+        autocast_enabled: bool = False,
+        autocast_dtype: torch.dtype | None = None,
     ) -> float:
         # Same-step state estimation (Ji et al. 2022 / UniFP obs_pred): the target
         # is the privileged block of the CURRENT critic obs, not the next step.
@@ -179,8 +182,14 @@ class CSEEstimator(nn.Module):
                 f"shape={tuple(critic_obs.shape)}, target=[{start}:{end}]"
             )
         target = critic_obs[:, start:end].detach()
-        pred = self.decoder(self.encoder(obs_history))
-        loss = self._regression_loss(pred, target)
+        amp_ctx = (
+            torch.autocast(device_type="cuda", dtype=autocast_dtype or torch.bfloat16)
+            if autocast_enabled
+            else contextlib.nullcontext()
+        )
+        with amp_ctx:
+            pred = self.decoder(self.encoder(obs_history))
+            loss = self._regression_loss(pred, target)
 
         self.optimizer.zero_grad()
         loss.backward()

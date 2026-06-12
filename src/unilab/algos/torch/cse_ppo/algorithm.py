@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import torch
@@ -38,11 +39,18 @@ class CSEPPO:
         min_learning_rate: float = 1e-5,
         max_learning_rate: float = 1e-2,
         min_policy_std: float = 1e-2,
+        use_amp: bool = False,
+        amp_dtype: str = "bfloat16",
         device: str = "cpu",
         **kwargs: Any,
     ) -> None:
         del kwargs
         self.device = device
+        # Mixed-precision (AMP) for the update forward/loss only. bf16 needs no
+        # GradScaler and only runs on CUDA; collection/rollout stays fp32 to avoid
+        # any train/deploy mismatch.
+        self._amp_enabled = bool(use_amp) and "cuda" in str(device)
+        self._amp_dtype = torch.bfloat16 if str(amp_dtype) == "bfloat16" else torch.float16
         self.desired_kl = desired_kl
         self.schedule = schedule
         self.learning_rate = float(learning_rate)
@@ -65,6 +73,12 @@ class CSEPPO:
         self.lam = float(lam)
         self.max_grad_norm = float(max_grad_norm)
         self.use_clipped_value_loss = bool(use_clipped_value_loss)
+
+    def _amp_ctx(self):
+        """Autocast context for the update forward/loss (no-op when AMP is off)."""
+        if self._amp_enabled:
+            return torch.autocast(device_type="cuda", dtype=self._amp_dtype)
+        return contextlib.nullcontext()
 
     def init_storage(
         self,
@@ -196,10 +210,15 @@ class CSEPPO:
             old_mu_batch,
             old_sigma_batch,
         ) in generator:
-            self.actor_critic.act(obs_batch)
-            actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)
-            value_batch = self.actor_critic.evaluate(critic_obs_batch)
-            mu_batch = self.actor_critic.action_mean
+            with self._amp_ctx():
+                self.actor_critic.act(obs_batch)
+                actions_log_prob_batch = self.actor_critic.get_actions_log_prob(actions_batch)
+                value_batch = self.actor_critic.evaluate(critic_obs_batch)
+            # Cast the AMP forward outputs back to fp32 so the KL / loss math below
+            # runs in full precision (only the matmul-heavy forwards use bf16).
+            actions_log_prob_batch = actions_log_prob_batch.float()
+            value_batch = value_batch.float()
+            mu_batch = self.actor_critic.action_mean.float()
             sigma_batch = self.actor_critic.action_std
             entropy_batch = self.actor_critic.entropy
 
@@ -253,6 +272,8 @@ class CSEPPO:
             estimation_loss = self.actor_critic.estimator.update(
                 obs_batch,
                 critic_obs_batch,
+                autocast_enabled=self._amp_enabled,
+                autocast_dtype=self._amp_dtype,
             )
 
             mean_value_loss += float(value_loss.item())

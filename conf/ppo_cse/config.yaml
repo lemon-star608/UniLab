@@ -49,6 +49,10 @@ algo:
     gamma: 0.99
     lam: 0.95
     max_grad_norm: 1.0
+    # bf16 mixed precision on the update forward/loss (CUDA only; no GradScaler).
+    # The 32-frame encoder's matmuls dominate the update — bf16 ~halves it.
+    use_amp: true
+    amp_dtype: bfloat16
 
 training:
   task_name: ???
