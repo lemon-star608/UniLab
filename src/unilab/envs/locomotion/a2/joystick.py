@@ -41,9 +41,7 @@ class A2JoystickControlConfig(ControlConfig):
 
 
 def _a2_scene() -> SceneCfg:
-    return SceneCfg(
-        model_file=str(ASSETS_ROOT_PATH / "robots" / "a2" / "scene_flat.xml")
-    )
+    return SceneCfg(model_file=str(ASSETS_ROOT_PATH / "robots" / "a2" / "scene_flat.xml"))
 
 
 @registry.envcfg("A2JoystickFlat")

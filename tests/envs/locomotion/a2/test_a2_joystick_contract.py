@@ -32,14 +32,20 @@ def test_a2_robot_xml_compiles_with_12_position_actuators():
     xml = ASSETS_ROOT_PATH / "robots" / "a2" / "a2.xml"
     model = mujoco.MjModel.from_xml_path(str(xml))
     assert model.nu == 12
-    names = [
-        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(model.nu)
-    ]
+    names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) for i in range(model.nu)]
     assert names == [
-        "FL_hip", "FL_thigh", "FL_calf",
-        "FR_hip", "FR_thigh", "FR_calf",
-        "RL_hip", "RL_thigh", "RL_calf",
-        "RR_hip", "RR_thigh", "RR_calf",
+        "FL_hip",
+        "FL_thigh",
+        "FL_calf",
+        "FR_hip",
+        "FR_thigh",
+        "FR_calf",
+        "RL_hip",
+        "RL_thigh",
+        "RL_calf",
+        "RR_hip",
+        "RR_thigh",
+        "RR_calf",
     ]
     # Position actuators carry an affine bias (kp in gainprm[0]); motor actuators do not.
     affine = int(mujoco.mjtBias.mjBIAS_AFFINE)
@@ -55,13 +61,20 @@ def test_a2_scene_loads_with_foot_contacts_and_home_keyframe():
     model = mujoco.MjModel.from_xml_path(str(xml))
 
     sensor_names = {
-        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SENSOR, i)
-        for i in range(model.nsensor)
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SENSOR, i) for i in range(model.nsensor)
     }
     for required in [
-        "gyro", "local_linvel", "upvector",
-        "FL_pos", "FR_pos", "RL_pos", "RR_pos",
-        "FL_foot_contact", "FR_foot_contact", "RL_foot_contact", "RR_foot_contact",
+        "gyro",
+        "local_linvel",
+        "upvector",
+        "FL_pos",
+        "FR_pos",
+        "RL_pos",
+        "RR_pos",
+        "FL_foot_contact",
+        "FR_foot_contact",
+        "RL_foot_contact",
+        "RR_foot_contact",
     ]:
         assert required in sensor_names, f"missing sensor {required}"
 
@@ -150,7 +163,6 @@ def test_a2_joystick_init_step_runs_finite():
     finite obs/reward, proving the leg-only A2 asset satisfies the joystick
     sensor contract on the hot path."""
     _skip_if_no_mujoco()
-    import numpy as np
 
     env = _make_a2_env(num_envs=2)
     state = env.init_state()
