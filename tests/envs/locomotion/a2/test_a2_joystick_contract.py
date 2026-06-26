@@ -44,3 +44,32 @@ def test_a2_robot_xml_compiles_with_12_position_actuators():
     # Position actuators carry an affine bias (kp in gainprm[0]); motor actuators do not.
     affine = int(mujoco.mjtBias.mjBIAS_AFFINE)
     assert all(int(model.actuator_biastype[i]) == affine for i in range(model.nu))
+
+
+def test_a2_scene_loads_with_foot_contacts_and_home_keyframe():
+    """scene_flat.xml includes a2.xml + floor, exposes the four foot-contact
+    sensors and the joystick foot-pos/IMU sensors, and a home keyframe whose
+    qpos is base(7)+12 leg = 19."""
+    mujoco = pytest.importorskip("mujoco")
+    xml = ASSETS_ROOT_PATH / "robots" / "a2" / "scene_flat.xml"
+    model = mujoco.MjModel.from_xml_path(str(xml))
+
+    sensor_names = {
+        mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SENSOR, i)
+        for i in range(model.nsensor)
+    }
+    for required in [
+        "gyro", "local_linvel", "upvector",
+        "FL_pos", "FR_pos", "RL_pos", "RR_pos",
+        "FL_foot_contact", "FR_foot_contact", "RL_foot_contact", "RR_foot_contact",
+    ]:
+        assert required in sensor_names, f"missing sensor {required}"
+
+    # home keyframe present, qpos length = 7 (free base) + 12 (legs).
+    assert model.nkey >= 1
+    key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "home")
+    assert key_id >= 0
+    assert model.nq == 19
+    # foot geoms used by the contact sensors exist.
+    for g in ["FL", "FR", "RL", "RR", "floor"]:
+        assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, g) >= 0
