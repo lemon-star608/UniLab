@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from unilab.assets import ASSETS_ROOT_PATH
 from unilab.base import registry
 from unilab.base.scene import SceneCfg
-from unilab.envs.locomotion.go2.base import ControlConfig
+from unilab.envs.locomotion.go2.base import Asset, ControlConfig
 from unilab.envs.locomotion.go2.joystick import (
     Go2JoystickCfg,
     Go2WalkTask,
@@ -23,6 +23,12 @@ from unilab.envs.locomotion.go2.joystick import (
 @dataclass
 class A2InitState:
     pos = [0.0, 0.0, 0.465]
+
+
+@dataclass
+class A2Asset(Asset):
+    # The A2 base body is named "base_link" in its MJCF, whereas Go2 uses "base".
+    base_name: str = "base_link"  # type: ignore[assignment]
 
 
 @dataclass
@@ -45,6 +51,7 @@ def _a2_scene() -> SceneCfg:
 class A2JoystickCfg(Go2JoystickCfg):
     scene: SceneCfg = field(default_factory=_a2_scene)
     init_state: A2InitState = field(default_factory=A2InitState)  # type: ignore[assignment]
+    asset: A2Asset = field(default_factory=A2Asset)  # type: ignore[assignment]
     control_config: A2JoystickControlConfig = field(  # type: ignore[assignment]
         default_factory=A2JoystickControlConfig
     )

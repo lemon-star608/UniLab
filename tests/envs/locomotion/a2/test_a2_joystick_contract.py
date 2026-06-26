@@ -101,3 +101,63 @@ def test_a2_joystick_yaml_composes_and_targets_a2():
     assert cfg.training.task_name == "A2JoystickFlat"
     assert cfg.training.sim_backend == "mujoco"
     assert "tracking_lin_vel" in cfg.reward.scales
+
+
+def _default_reward_cfg():
+    from unilab.envs.locomotion.go2.joystick import RewardConfig
+
+    return RewardConfig(
+        scales={
+            "tracking_lin_vel": 1.0,
+            "tracking_ang_vel": 0.2,
+            "lin_vel_z": -5.0,
+            "ang_vel_xy": -0.1,
+            "base_height": -100.0,
+            "action_rate": -0.005,
+            "similar_to_default": -0.1,
+            "contact": 0.24,
+            "swing_feet_z": 4.0,
+        },
+        tracking_sigma=0.25,
+        base_height_target=0.45,
+    )
+
+
+def _make_a2_env(num_envs: int = 2):
+    from unilab.base import registry
+
+    _ensure_registered()
+    return registry.make(
+        "A2JoystickFlat",
+        sim_backend="mujoco",
+        num_envs=num_envs,
+        env_cfg_override={"reward_config": _default_reward_cfg()},
+    )
+
+
+@pytest.mark.slow
+def test_a2_joystick_obs_layout_and_12_dof():
+    _skip_if_no_mujoco()
+    env = _make_a2_env(num_envs=2)
+    assert env._num_action == 12
+    assert env.default_angles.shape == (12,)
+    assert env.obs_groups_spec == {"obs": 49, "critic": 52}
+
+
+@pytest.mark.slow
+def test_a2_joystick_init_step_runs_finite():
+    """End-to-end: init + steps must run (all A2 sensors/geoms resolve) with
+    finite obs/reward, proving the leg-only A2 asset satisfies the joystick
+    sensor contract on the hot path."""
+    _skip_if_no_mujoco()
+    import numpy as np
+
+    env = _make_a2_env(num_envs=2)
+    state = env.init_state()
+    assert state.obs["obs"].shape == (2, 49)
+    assert state.obs["critic"].shape == (2, 52)
+    for _ in range(10):
+        state = env.step(np.zeros((2, 12), dtype=np.float64))
+    assert np.isfinite(state.reward).all()
+    assert np.isfinite(state.obs["obs"]).all()
+    assert np.isfinite(state.obs["critic"]).all()
