@@ -89,3 +89,15 @@ def test_a2_joystick_registered():
 
     _ensure_registered()
     assert registry.contains("A2JoystickFlat")
+
+
+def test_a2_joystick_yaml_composes_and_targets_a2():
+    """The owner YAML composes under Hydra and selects the A2JoystickFlat task
+    with a reward block that injects into the env's reward_config."""
+    from hydra import compose, initialize
+
+    with initialize(config_path="../../../../conf/ppo", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["task=a2_joystick_flat/mujoco"])
+    assert cfg.training.task_name == "A2JoystickFlat"
+    assert cfg.training.sim_backend == "mujoco"
+    assert "tracking_lin_vel" in cfg.reward.scales
