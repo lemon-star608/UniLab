@@ -9,7 +9,6 @@ constructs and steps in MuJoCo as a 12-DOF joystick task."""
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
 
 import numpy as np
 import pytest

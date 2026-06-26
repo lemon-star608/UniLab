@@ -3,8 +3,9 @@
 The A2 leg-only MJCF (robots/a2/scene_flat.xml) mirrors the Go2 joystick
 sensor/geom/leg-ordering contract and uses <position> actuators, so this
 task reuses Go2WalkTask unchanged. Only the A2 identity differs: scene path,
-standing height, and PD gains (A2 legs are stronger than Go2's; the per-joint
-gain split lives in a2.xml's <position> classes, the env passes scalar Kp/Kd)."""
+standing height, and PD gains (A2 legs are stronger than Go2's, so a single
+scalar Kp/Kd is raised vs Go2 and applied to all 12 leg actuators at init via
+position_actuator_gains)."""
 
 from __future__ import annotations
 
@@ -33,9 +34,10 @@ class A2Asset(Asset):
 
 @dataclass
 class A2JoystickControlConfig(ControlConfig):
-    # A2 legs are far stronger than Go2's. The per-joint gain split
-    # (calf stiffer) lives in a2.xml's <position> default classes; the env
-    # forwards these scalars to the backend as position_actuator_gains.
+    # A2 legs are far stronger than Go2's, so raise the scalar PD gains. The env
+    # forwards these to the backend as position_actuator_gains, which applies
+    # them uniformly to all 12 leg actuators (overriding any per-class kp in
+    # a2.xml). Keep a2.xml's <position> kp consistent with this scalar.
     Kp: float = 100.0
     Kd: float = 4.0
 
