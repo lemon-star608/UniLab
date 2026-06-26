@@ -1,0 +1,58 @@
+"""A2 joystick task (leg-only Unitree A2).
+
+The A2 leg-only MJCF (robots/a2/scene_flat.xml) mirrors the Go2 joystick
+sensor/geom/leg-ordering contract and uses <position> actuators, so this
+task reuses Go2WalkTask unchanged. Only the A2 identity differs: scene path,
+standing height, and PD gains (A2 legs are stronger than Go2's; the per-joint
+gain split lives in a2.xml's <position> classes, the env passes scalar Kp/Kd)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from unilab.assets import ASSETS_ROOT_PATH
+from unilab.base import registry
+from unilab.base.scene import SceneCfg
+from unilab.envs.locomotion.go2.base import ControlConfig
+from unilab.envs.locomotion.go2.joystick import (
+    Go2JoystickCfg,
+    Go2WalkTask,
+)
+
+
+@dataclass
+class A2InitState:
+    pos = [0.0, 0.0, 0.465]
+
+
+@dataclass
+class A2JoystickControlConfig(ControlConfig):
+    # A2 legs are far stronger than Go2's. The per-joint gain split
+    # (calf stiffer) lives in a2.xml's <position> default classes; the env
+    # forwards these scalars to the backend as position_actuator_gains.
+    Kp: float = 100.0
+    Kd: float = 4.0
+
+
+def _a2_scene() -> SceneCfg:
+    return SceneCfg(
+        model_file=str(ASSETS_ROOT_PATH / "robots" / "a2" / "scene_flat.xml")
+    )
+
+
+@registry.envcfg("A2JoystickFlat")
+@dataclass
+class A2JoystickCfg(Go2JoystickCfg):
+    scene: SceneCfg = field(default_factory=_a2_scene)
+    init_state: A2InitState = field(default_factory=A2InitState)  # type: ignore[assignment]
+    control_config: A2JoystickControlConfig = field(  # type: ignore[assignment]
+        default_factory=A2JoystickControlConfig
+    )
+
+
+@registry.env("A2JoystickFlat", sim_backend="mujoco")
+class A2JoystickFlatEnv(Go2WalkTask):
+    """Leg-only A2 joystick task. Identical logic to Go2WalkTask; only the
+    config (asset path, standing height, gains) differs."""
+
+    _cfg: A2JoystickCfg

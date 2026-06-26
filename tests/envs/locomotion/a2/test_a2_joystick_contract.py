@@ -73,3 +73,19 @@ def test_a2_scene_loads_with_foot_contacts_and_home_keyframe():
     # foot geoms used by the contact sensors exist.
     for g in ["FL", "FR", "RL", "RR", "floor"]:
         assert mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, g) >= 0
+
+
+def _ensure_registered() -> None:
+    from unilab.base import registry
+
+    registry.ensure_registries()
+    if not registry.contains("A2JoystickFlat"):
+        importlib.import_module("unilab.envs.locomotion.a2.joystick")
+
+
+def test_a2_joystick_registered():
+    """Registers without MuJoCo (decorators run on module import)."""
+    from unilab.base import registry
+
+    _ensure_registered()
+    assert registry.contains("A2JoystickFlat")
