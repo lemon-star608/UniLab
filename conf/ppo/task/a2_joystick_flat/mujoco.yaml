@@ -19,16 +19,18 @@ algo:
     learning_rate: 3.0e-4
     entropy_coef: 1.0e-3
 env:
-  # Full domain randomization for sim2real deployment. Every switch the joystick
-  # DR provider consumes (src/unilab/dr/dr_utils.py) is enumerated here. Ranges
-  # are calibrated to A2's 19.6 kg chassis (reusing A2-arm pos-force validated
-  # values), NOT Go2's lighter defaults. gravity is OFF (constant on flat
-  # ground). env.domain_rand is sim2sim ALLOWLIST (free override).
+  # Domain randomization for sim2real deployment. Uses the switches supported
+  # by Go2JoystickDomainRandomizationProvider (which A2JoystickFlatEnv reuses).
+  # That provider does not cache body-mass / geom-friction / dof-armature
+  # baselines, so randomize_body_mass / randomize_ground_friction /
+  # randomize_dof_armature are off. Ranges are calibrated to A2's 19.6 kg
+  # chassis. gravity is OFF (constant on flat ground).
+  # env.domain_rand is sim2sim ALLOWLIST (free override).
   domain_rand:
     randomize_base_mass: true
     added_mass_range: [0.0, 8.0]
 
-    randomize_body_mass: true
+    randomize_body_mass: false   # Go2JoystickDomainRandomizationProvider does not cache base_body_mass
     body_mass_multiplier_range: [0.9, 1.1]
 
     random_com: true
@@ -38,10 +40,10 @@ env:
 
     randomize_gravity: false   # flat ground: gravity constant on the real robot; randomizing only slows training.
 
-    randomize_ground_friction: true
+    randomize_ground_friction: false   # Go2JoystickDomainRandomizationProvider does not cache geom friction
     ground_friction_multiplier_range: [0.5, 1.8]
 
-    randomize_dof_armature: true
+    randomize_dof_armature: false   # Go2JoystickDomainRandomizationProvider does not cache dof armature
     dof_armature_multiplier_range: [0.8, 1.2]
 
     randomize_kp: true
