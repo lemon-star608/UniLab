@@ -172,3 +172,35 @@ def test_a2_joystick_init_step_runs_finite():
     assert np.isfinite(state.reward).all()
     assert np.isfinite(state.obs["obs"]).all()
     assert np.isfinite(state.obs["critic"]).all()
+
+
+def test_a2_joystick_domain_rand_fully_configured():
+    """Owner YAML enables all DR switches except gravity, with A2-scale ranges,
+    3-axis COM, base_link push target, and the 500-iteration budget."""
+    from hydra import compose, initialize
+
+    with initialize(config_path="../../../../conf/ppo", version_base="1.3"):
+        cfg = compose(config_name="config", overrides=["task=a2_joystick_flat/mujoco"])
+
+    dr = cfg.env.domain_rand
+    # 8 on / gravity off
+    assert dr.randomize_base_mass is True
+    assert dr.randomize_body_mass is True
+    assert dr.random_com is True
+    assert dr.randomize_gravity is False
+    assert dr.randomize_ground_friction is True
+    assert dr.randomize_dof_armature is True
+    assert dr.randomize_kp is True
+    assert dr.randomize_kd is True
+    assert dr.push_robots is True
+    # 3-axis COM present + A2-scale value
+    assert list(dr.com_offset_x) == [-0.08, 0.08]
+    assert list(dr.com_offset_y) == [-0.08, 0.08]
+    assert list(dr.com_offset_z) == [-0.08, 0.08]
+    # A2-calibrated ranges + push target
+    assert list(dr.added_mass_range) == [0.0, 8.0]
+    assert list(dr.ground_friction_multiplier_range) == [0.5, 1.8]
+    assert dr.push_interval == 400
+    assert dr.push_body_name == "base_link"
+    # bumped budget
+    assert cfg.algo.max_iterations == 500

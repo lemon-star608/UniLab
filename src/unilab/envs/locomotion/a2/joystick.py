@@ -16,6 +16,7 @@ from unilab.base import registry
 from unilab.base.scene import SceneCfg
 from unilab.envs.locomotion.go2.base import Asset, ControlConfig
 from unilab.envs.locomotion.go2.joystick import (
+    Go2DomainRandConfig,
     Go2JoystickCfg,
     Go2WalkTask,
 )
@@ -46,6 +47,17 @@ def _a2_scene() -> SceneCfg:
     return SceneCfg(model_file=str(ASSETS_ROOT_PATH / "robots" / "a2" / "scene_flat.xml"))
 
 
+@dataclass
+class A2JoystickDomainRandConfig(Go2DomainRandConfig):
+    # A2's base COM is uncertain in all 3 axes on the real robot. dr_utils reads
+    # com_offset_y/z via getattr, so they must be declared here to be settable
+    # from the owner YAML (Hydra struct mode rejects undeclared keys). Inherits
+    # com_offset_x + every other DR switch/range from Go2DomainRandConfig and
+    # the base DomainRandConfig; on/off + ranges are set in the owner YAML.
+    com_offset_y: list[float] = field(default_factory=lambda: [-0.08, 0.08])
+    com_offset_z: list[float] = field(default_factory=lambda: [-0.08, 0.08])
+
+
 @registry.envcfg("A2JoystickFlat")
 @dataclass
 class A2JoystickCfg(Go2JoystickCfg):
@@ -54,6 +66,9 @@ class A2JoystickCfg(Go2JoystickCfg):
     asset: A2Asset = field(default_factory=A2Asset)  # type: ignore[assignment]
     control_config: A2JoystickControlConfig = field(  # type: ignore[assignment]
         default_factory=A2JoystickControlConfig
+    )
+    domain_rand: A2JoystickDomainRandConfig = field(  # type: ignore[assignment]
+        default_factory=A2JoystickDomainRandConfig
     )
 
 
