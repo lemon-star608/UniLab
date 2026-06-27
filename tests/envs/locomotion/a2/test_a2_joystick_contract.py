@@ -135,15 +135,18 @@ def _default_reward_cfg():
     )
 
 
-def _make_a2_env(num_envs: int = 2):
+def _make_a2_env(num_envs: int = 2, domain_rand=None):
     from unilab.base import registry
 
     _ensure_registered()
+    override = {"reward_config": _default_reward_cfg()}
+    if domain_rand is not None:
+        override["domain_rand"] = domain_rand
     return registry.make(
         "A2JoystickFlat",
         sim_backend="mujoco",
         num_envs=num_envs,
-        env_cfg_override={"reward_config": _default_reward_cfg()},
+        env_cfg_override=override,
     )
 
 
@@ -206,7 +209,7 @@ def test_a2_joystick_dr_on_constructs_and_steps_finite():
         push_interval=400,
         push_body_name="base_link",
     )
-    env = _make_a2_env_with_dr(dr_on)
+    env = _make_a2_env(num_envs=4, domain_rand=dr_on)
 
     # DR fields are active on the constructed config.
     assert env._cfg.domain_rand.push_robots is True
@@ -223,18 +226,6 @@ def test_a2_joystick_dr_on_constructs_and_steps_finite():
     assert np.isfinite(state.obs["obs"]).all()
     assert np.isfinite(state.obs["critic"]).all()
 
-
-def _make_a2_env_with_dr(dr_cfg):
-    """Like _make_a2_env but injects a fully DR-on config."""
-    from unilab.base import registry
-
-    _ensure_registered()
-    return registry.make(
-        "A2JoystickFlat",
-        sim_backend="mujoco",
-        num_envs=4,
-        env_cfg_override={"reward_config": _default_reward_cfg(), "domain_rand": dr_cfg},
-    )
 
 
 def test_a2_joystick_domain_rand_fully_configured():
