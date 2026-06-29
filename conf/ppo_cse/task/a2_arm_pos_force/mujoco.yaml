@@ -1,0 +1,94 @@
+# @package _global_
+# A2 + Airbot Play pos-force task (Unitree A2 quadruped, same isomorphic task as
+# Go2ArmPosForce). Robot-physics defaults (leg gains/torque, EE sphere centre,
+# gait, base force magnitudes, mass/COM DR) live in A2ArmPosForceCfg; this YAML
+# carries only training + reward + force-curriculum, mirroring the Go2 task.
+# bf16 AMP (use_amp/amp_dtype) is inherited from conf/ppo_cse/config.yaml — do
+# NOT re-declare it here.
+training:
+  task_name: A2ArmPosForce
+  sim_backend: mujoco
+algo:
+  num_envs: 1024
+  max_iterations: 10000
+
+  num_one_step_obs: 76
+  num_actor_history: 32
+  num_critic_history: 3
+  empirical_normalization: false
+  policy:
+    init_noise_std: 1.0
+  algorithm:
+    # Same conservative tune as Go2 at 2048 envs: UniFP's lr=1e-3/epochs=5/kl=0.01
+    # blow up the action std + collapse reward mid-training on the smaller batch.
+    learning_rate: 5.0e-4
+    entropy_coef: 1.0e-2        # UniFP value; std clamp prevents std<=0
+    num_learning_epochs: 5
+    desired_kl: 0.01
+    min_learning_rate: 5.0e-5
+  estimator:
+    target_start: 0
+    learning_rate: 1.0e-5
+    latent_dim: 64              # history(32) x 2, matching UniFP's encoder latent
+    enc_hidden_dims: [512, 256, 128]
+    dec_hidden_dims: [128, 64]
+    target_group_sizes: [3, 3, 3, 3]
+    target_weights: [0.2, 0.2, 1.0, 1.0]
+reward:
+  tracking_sigma: 0.25
+  tracking_ee_sigma: 1.0
+  base_height_target: 0.45      # = Go2; matches the new ~0.45 default standing pose (was 0.40 over a 0.9/-1.8 crouch)
+  soft_torque_limit: 0.9
+  ref_dof_scale: 0.1
+  stand_still_scale: 0.05
+  max_contact_force: 400.0      # A2 ~42 kg total -> ~103 N/foot static, ~250 N dynamic peak
+  feet_air_time_threshold: 0.5
+  feet_height_target: 0.12      # scaled by A2/Go2 leg-length ratio (~1.18)
+  feet_height_high_target: 0.24
+  scales:
+    # force/position tracking (the unified objective)
+    tracking_lin_vel_force_world: 2.0
+    tracking_ee_force_world: 2.0
+    tracking_ang_vel: 1.0
+    # gait reference + survival
+    ref_dof_leg: 1.0
+    alive: 1.5
+    feet_contact_number: 2.0
+    feet_air_time: 1.0
+    feet_height: 1.0
+    feet_height_high: -15.0
+    stand_still: 0.5
+    # locomotion regularization
+    lin_vel_z: -1.5
+    ang_vel_xy: -0.02
+    dof_vel: -8.0e-4
+    dof_vel_arm: -2.0e-4
+    dof_acc: -2.5e-7
+    dof_acc_arm: -4.5e-7
+    action_rate: -0.02
+    action_rate_arm: -0.045
+    torques: -5.0e-6
+    base_height: -2.0
+    hip_pos: -0.5
+    feet_pos_xy: -0.5
+    feet_drag: -8e-4
+    feet_contact_forces: -1.0e-3
+    collision: -5.0
+    dof_pos_limits: -10.0
+    torque_limits: -0.005
+env:
+  # Robot-physics (leg gains/torque, sphere centre z=0.67, gait 0.70/0.18, base
+  # force ±60/±50, mass DR [0,8], COM ±0.08, base_name) come from A2ArmPosForceCfg.
+  history:
+    num_actor_history: 32
+    num_critic_history: 3
+  control_config:
+    action_delay_steps: 0   # match UniFP's actual (zero) delay; re-add 3 before real-robot deploy
+  commands:
+    # Disturbance timing aligned to UniFP (was densified, copied from the Go2
+    # task). Intervals + ext trigger probs use the dataclass UniFP defaults;
+    force_start_step: 96000
+    zero_vel_cmd_prob_after_force: 0.8
+    force_z_base_ext_scale: 0.05
+    max_push_force_xyz_base_ext: [-30.0, 30.0]
+    max_push_force_xyz_base_cmd: [-30.0, 30.0]  # matches the base force limits in A2ArmPosForceCfg, which are higher than Go2's
