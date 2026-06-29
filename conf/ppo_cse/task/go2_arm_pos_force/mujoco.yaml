@@ -1,0 +1,107 @@
+# @package _global_
+training:
+  task_name: Go2ArmPosForce
+  sim_backend: mujoco
+algo:
+  num_envs: 1024
+  max_iterations: 20000        # toward UniFP's budget; LR no longer floors early
+
+  num_one_step_obs: 76          # actor single-step obs dim
+  num_actor_history: 32         # must match env.history.num_actor_history
+  num_critic_history: 3
+  empirical_normalization: false
+  policy:
+    init_noise_std: 1.0
+  algorithm:
+    # Conservative for 2048 envs. UniFP's lr=1e-3 / epochs=5 / kl=0.01 are stable
+    # on its 4096 batch but on 2048 they caused a mid-training std blow-up
+    # (0.6 -> 1.34) + reward collapse (166 -> 75) before recovering.
+    learning_rate: 5.0e-4       # was 1e-3 (too aggressive at 2048 batch)
+    entropy_coef: 1.0e-2        # UniFP value; std clamp prevents std<=0
+    num_learning_epochs: 9      # was 5; fewer passes/rollout -> smoother value, less collapse
+    desired_kl: 0.02            # looser KL -> smoother adaptive LR
+    min_learning_rate: 5.0e-5   # adaptive-LR floor (anti late-training stall)
+  estimator:
+    target_start: 0             # CSE targets at the front of the 1-step critic obs
+    learning_rate: 1.0e-5       # UniFP adaptation_module_learning_rate (faithful; was retuned to 1e-4)
+    latent_dim: 64              # history(32) x 2, matching UniFP's encoder latent
+    enc_hidden_dims: [512, 256, 128]
+    dec_hidden_dims: [128, 64]
+    # UniFP per-GROUP weights [lin_vel, ee_pos, force_ee, force_base], applied as
+    # sum_g mse(pred_g*w_g, tgt_g*w_g) (weights enter the MSE, so squared inside).
+    target_group_sizes: [3, 3, 3, 3]
+    target_weights: [0.2, 0.2, 1.0, 1.0]
+reward:
+  tracking_sigma: 0.25
+  tracking_ee_sigma: 1.0
+  base_height_target: 0.40
+  soft_torque_limit: 0.9
+  ref_dof_scale: 0.1
+  stand_still_scale: 0.05
+  max_contact_force: 200.0
+  feet_air_time_threshold: 0.5
+  feet_height_target: 0.10
+  feet_height_high_target: 0.20
+  scales:
+    # force/position tracking (the unified objective)
+    tracking_lin_vel_force_world: 2.0
+    tracking_ee_force_world: 2.0
+    tracking_ang_vel: 1.0
+    # gait reference + survival
+    ref_dof_leg: 1.0
+    alive: 1.5
+    feet_contact_number: 2.0
+    feet_air_time: 1.0
+    feet_height: 1.0
+    feet_height_high: -15.0
+    stand_still: 0.5
+    # locomotion regularization
+    lin_vel_z: -1.5
+    ang_vel_xy: -0.02
+    dof_vel: -8.0e-4
+    dof_vel_arm: -2.0e-4
+    dof_acc: -2.5e-7
+    dof_acc_arm: -4.5e-7
+    action_rate: -0.02
+    action_rate_arm: -0.045
+    torques: -5.0e-6
+    base_height: -2.0
+    hip_pos: -0.5
+    feet_pos_xy: -0.5
+    feet_drag: -8e-4          # ④ press harder against foot sliding under load
+    feet_contact_forces: -1.0e-3
+    collision: -5.0
+    dof_pos_limits: -10.0
+    torque_limits: -0.005
+env:
+  history:
+    num_actor_history: 32
+    num_critic_history: 3   # functional value: critic stacks 3 privileged frames
+  goal_ee:
+    # Reverted to UniFP values (the migration had retuned these to
+    # init_pos_start [0.24,0.6,0] / pos_l [0.25,0.5]) to reproduce UniFP's
+    # EE-goal training distribution.
+    init_pos_start: [0.5, 0.7853981633974483, 0.0]  # [0.5, pi/4, 0] (UniFP)
+    pos_l: [0.25, 0.6]
+  control_config:
+    action_delay_steps: 0   # C2: UniFP's action_delay is dead config (zero actual
+                            # delay); match it. Re-add (3) before real-robot deploy.
+  commands:
+    # Disturbance timing aligned to UniFP (was densified). Force-episode intervals
+    # + ext trigger probs use the dataclass UniFP defaults (gripper cmd[5,10]/
+    # ext[6,12], base cmd[5,10]/ext[8,14], ext prob 0.3); forces start at
+    # iter 6000 (144000 control steps).
+    force_start_step: 144000
+    zero_vel_cmd_prob_after_force: 0.8
+    force_z_base_ext_scale: 0.05
+  domain_rand:
+    # UniFP base-velocity impulse push (0.3 m/s, 2.5x when standing), applied
+    # in-env. The shared force-based interval push stays off (push_robots=false).
+    push_robots: false
+    velocity_push: true
+    push_interval: 400
+    max_push_vel_xy: 0.3
+    randomize_gripper_mass: true
+    gripper_added_mass_range: [0.0, 0.12]
+    # ground friction / base COM DR now use the dr_utils contract field names
+    # (randomize_ground_friction / random_com); ranges kept at UniFP defaults.

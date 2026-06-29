@@ -320,8 +320,10 @@ class MuJoCoBackend(SimBackend):
         self.backend_type = "mujoco"
         self._pending_xfrc_applied = np.zeros((num_envs, 6 * self._model.nbody), dtype=np.float64)
 
-        # Thread configuration.
-        self._n_threads = min(num_envs, cpu_count() * 2)
+        # Batched mj_step is compute-bound; oversubscribing past the logical-core
+        # count thrashes (context switches + cache contention), so cap threads at
+        # the logical-core count.
+        self._n_threads = min(num_envs, cpu_count())
 
         self._model_variants: tuple[mujoco.MjModel, ...] = (self._model,)
         self._model_assignments = np.zeros((num_envs,), dtype=np.int32)
