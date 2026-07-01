@@ -1744,6 +1744,13 @@ class A2ArmPosForceCfg(Go2ArmPosForceCfg):
     goal_ee: GoalEEConfig = field(
         # EE-goal sphere centred higher: A2 arm base sits ~0.46 m above the feet
         # (vs Go2 ~0.40); 0.67 reproduces Go2's centre-to-armbase delta of +0.205.
+        # NOTE: x_offset stays at the default 0.2 (do NOT set 0). Although the Airbot
+        # mounts at the base centre (x=0) — so 0.2 does NOT centre the sphere on the
+        # shoulder like it does for UniFP's forward-mounted Z1 — the 0.2 forward shift
+        # is what keeps the goal cloud inside Airbot's FORWARD reach cone. IK sampling:
+        # x_offset=0.2 -> 88% of goals reachable within soft joint limits, 0% behind
+        # the shoulder; x_offset=0 -> only 62% soft-reachable, 16% behind -> dof_pos_
+        # limits explodes and reward collapses (verified 2026-07-01). See memory.
         default_factory=lambda: GoalEEConfig(sphere_center=SphereCenter(z_invariant_offset=0.67))
     )
     gait: GaitConfig = field(

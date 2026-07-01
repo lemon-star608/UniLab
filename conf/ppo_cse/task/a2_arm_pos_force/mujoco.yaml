@@ -10,7 +10,7 @@ training:
   sim_backend: mujoco
 algo:
   num_envs: 1024
-  max_iterations: 10000
+  max_iterations: 20000
 
   num_one_step_obs: 76
   num_actor_history: 32
@@ -19,13 +19,15 @@ algo:
   policy:
     init_noise_std: 1.0
   algorithm:
-    # Same conservative tune as Go2 at 2048 envs: UniFP's lr=1e-3/epochs=5/kl=0.01
-    # blow up the action std + collapse reward mid-training on the smaller batch.
+    # Reverted to the 2026-06-30_12-13-51 run's tuning (the stable run): 1024 envs,
+    # entropy 0.01, min_lr 5e-5. The C-group changes (2048 / entropy 0.003 / 1e-5)
+    # made the post-force degradation WORSE, so we go back to the known-good config
+    # and probe stability by raising the EE (gripper) force instead.
     learning_rate: 5.0e-4
-    entropy_coef: 1.0e-2        # UniFP value; std clamp prevents std<=0
+    entropy_coef: 1.0e-2        # 12-13-51 value (std clamp prevents std<=0)
     num_learning_epochs: 5
     desired_kl: 0.01
-    min_learning_rate: 5.0e-5
+    min_learning_rate: 5.0e-5   # 12-13-51 value
   estimator:
     target_start: 0
     learning_rate: 1.0e-5
@@ -85,10 +87,14 @@ env:
   control_config:
     action_delay_steps: 0   # match UniFP's actual (zero) delay; re-add 3 before real-robot deploy
   commands:
-    # Disturbance timing aligned to UniFP (was densified, copied from the Go2
-    # task). Intervals + ext trigger probs use the dataclass UniFP defaults;
-    force_start_step: 96000
+    # Force curriculum aligned to the stable 12-13-51 run: force starts at 192000
+    # control steps (UniFP's 8000 iters × 24). Base force stays OFF (UniFP behavior).
+    # EE (gripper) force RAISED from the default ±18/±15 to ±30/±30 to probe whether
+    # the policy stays stable under stronger end-effector force (experiment).
+    force_start_step: 192000
     zero_vel_cmd_prob_after_force: 0.8
-    force_z_base_ext_scale: 0.05
-    max_push_force_xyz_base_ext: [-30.0, 30.0]
-    max_push_force_xyz_base_cmd: [-30.0, 30.0]  # matches the base force limits in A2ArmPosForceCfg, which are higher than Go2's
+    force_z_base_ext_scale: 0.0       # base force disabled
+    max_push_force_xyz_base_ext: [-25.0, 25.0]  # base force disabled
+    max_push_force_xyz_base_cmd: [-20.0, 20.0]  # base force disabled
+    max_push_force_xyz_gripper_cmd: [-18.0, 18.0]  # raised from default ±18
+    max_push_force_xyz_gripper_ext: [-15.0, 15.0]  # raised from default ±15
