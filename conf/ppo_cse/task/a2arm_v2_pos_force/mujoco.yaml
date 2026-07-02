@@ -1,0 +1,99 @@
+# @package _global_
+# A2 + P7v3 (7-DOF arm, joint7 frozen) + UMI gripper v3 pos-force task.
+# Adapted from A2ArmPosForce (A2 + Airbot Play), with P7v3-specific tuning:
+#   - Sphere center at shoulder height (z=0.715 vs 0.67)
+#   - Sampling range scaled to P7v3 reach (0.749m vs Airbot 0.81m)
+#   - PD gains tuned for P7v3 joint inertia (heavier proximal, lighter wrist)
+#   - Force curriculum aligned with UniFP ground truth (base force OFF)
+#   - Home keyframe at [0.5m, 45°, 0°] verified via FK
+
+training:
+  task_name: A2ArmV2PosForce
+  sim_backend: mujoco
+
+algo:
+  num_envs: 1024
+  max_iterations: 20000
+  num_one_step_obs: 76
+  num_actor_history: 32
+  num_critic_history: 3
+  empirical_normalization: false
+
+  policy:
+    init_noise_std: 1.0
+
+  algorithm:
+    learning_rate: 5.0e-4
+    entropy_coef: 1.0e-2
+    num_learning_epochs: 5
+    desired_kl: 0.01
+    min_learning_rate: 5.0e-5
+
+  estimator:
+    target_start: 0
+    learning_rate: 1.0e-5
+    latent_dim: 64
+    enc_hidden_dims: [512, 256, 128]
+    dec_hidden_dims: [128, 64]
+    target_group_sizes: [3, 3, 3, 3]
+    target_weights: [0.2, 0.2, 1.0, 1.0]
+
+reward:
+  tracking_sigma: 0.25
+  tracking_ee_sigma: 1.0
+  base_height_target: 0.45          # A2 per-pair stand (shared with A2ArmPosForce; settles ~0.41-0.45)
+  max_contact_force: 400.0
+  feet_height_target: 0.12
+  feet_height_high_target: 0.24
+  soft_torque_limit: 0.9
+  soft_dof_pos_limit: 0.8
+  ref_dof_scale: 0.1
+  stand_still_scale: 0.05
+  feet_air_time_threshold: 0.5
+
+  scales:
+    tracking_lin_vel_force_world: 2.0
+    tracking_ee_force_world: 2.0
+    tracking_ang_vel: 1.0
+    ref_dof_leg: 1.0
+    alive: 1.5
+    feet_contact_number: 2.0
+    feet_air_time: 1.0
+    feet_height: 1.0
+    feet_height_high: -15.0
+    stand_still: 0.5
+    lin_vel_z: -1.5
+    ang_vel_xy: -0.02
+    dof_vel: -8.0e-4
+    dof_vel_arm: -2.0e-4
+    dof_acc: -2.5e-7
+    dof_acc_arm: -4.5e-7
+    action_rate: -0.02
+    action_rate_arm: -0.045
+    torques: -5.0e-6
+    base_height: -2.0
+    hip_pos: -0.5
+    feet_pos_xy: -0.5
+    feet_drag: -8e-4
+    feet_contact_forces: -1.0e-3
+    collision: -5.0
+    dof_pos_limits: -10.0
+    torque_limits: -0.005
+
+env:
+  history:
+    num_actor_history: 32
+    num_critic_history: 3
+
+  control_config:
+    action_delay_steps: 0
+
+  commands:
+    force_start_step: 192000
+    zero_vel_cmd_prob_after_force: 0.8
+    max_push_force_xyz_gripper_cmd: [-30.0, 30.0]
+    max_push_force_xyz_gripper_ext: [-30.0, 30.0]
+    max_push_force_xyz_base_cmd: [0.0, 0.0]
+    max_push_force_xyz_base_ext: [0.0, 0.0]
+    base_forced_prob_cmd: 0.0
+    base_forced_prob_ext: 0.0

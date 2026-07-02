@@ -339,7 +339,7 @@ class PosForceCommandsConfig:
     settling_time_force_gripper_s: float = 0.5
     settling_time_force_base_s: float = 1.0
     gripper_forced_prob_cmd: float = 0.4
-    gripper_forced_prob_ext: float = 0.3
+    gripper_forced_prob_ext: float = 0.8
     base_forced_prob_cmd: float = 0.4
     base_forced_prob_ext: float = 0.3
     # Force/compliance stiffness used to offset the EE position / base velocity
@@ -1781,3 +1781,106 @@ class A2ArmPosForceEnv(Go2ArmPosForceEnv):
     MJCF mirrors the Go2 sensor/geom/ordering contract, so only the config differs."""
 
     _cfg: A2ArmPosForceCfg
+
+
+# ── A2 + P7v3 (7-DOF, joint7 frozen) + UMI v3 gripper variant ───────────────
+# P7v3 arm: 7-DOF articulated, joint7 fixed at 0 rad in MJCF (effectively 6-DOF).
+# UMI gripper: all joints deleted, body hierarchy welded (施力点在 end_link TCP).
+# Geometry: shoulder at armbase + 0.16452 m (z=0.715 at spawn), reach 0.749 m.
+
+
+def _a2arm_v2_default_model_file() -> str:
+    return str(ASSETS_ROOT_PATH / "robots" / "a2arm_v2" / "scene_pos_force.xml")
+
+
+def _a2arm_v2_default_scene() -> SceneCfg:
+    return SceneCfg(model_file=_a2arm_v2_default_model_file())
+
+
+@registry.envcfg("A2ArmV2PosForce")
+@dataclass
+class A2ArmV2PosForceCfg(A2ArmPosForceCfg):
+    """A2 + P7v3 (7-DOF with joint7 frozen) + UMI gripper v3 pos-force task.
+
+    Inherits A2ArmPosForceCfg (A2 + Airbot), overrides arm-specific parameters:
+    - PD gains tuned for P7v3 (heavier proximal joints, lighter wrist)
+    - Sphere center at shoulder height (0.750 m, vs Airbot 0.67 m). The A2 legs
+      hold the shared a2_arm per-pair stand (front 0.75 / rear 1.0 thigh) at
+      base z≈0.465, so the P7v3 shoulder (arm_base 0.1209 + 0.16452) sits at
+      0.750 m. Per-pair (not uniform) angles widen the fore-aft support polygon
+      so the arm's pitching moment doesn't knee the rear legs.
+    - Sampling range scaled to P7v3 reach (0.749 m vs Airbot 0.81 m)
+    - Home keyframe at [0.5m, 45°, 0°] (symmetric shoulder+elbow, jitter-safe);
+      shoulder-relative, so invariant to the base standing height.
+    """
+    scene: SceneCfg = field(default_factory=_a2arm_v2_default_scene)
+    model_file: str = field(default_factory=_a2arm_v2_default_model_file)
+    asset: Asset = field(default_factory=lambda: Asset(base_name="base_link", ee_body_name="end_link"))
+
+    control_config: PosForceControlConfig = field(  # type: ignore[assignment]
+        default_factory=lambda: PosForceControlConfig(
+            # A2 legs (inherited from A2ArmPosForceCfg, restated for clarity)
+            leg_kp=[100.0, 100.0, 150.0],
+            leg_kd=[4.0, 4.0, 6.0],
+            leg_torque_limit=[120.0, 120.0, 180.0],
+            # P7v3 arm (6-DOF effective): j1-4 higher kp (shoulder/elbow), j5-6 wrist.
+            arm_kp=[90.0, 120.0, 80.0, 70.0, 30.0, 30.0],
+            arm_kd=[3.0, 4.0, 2.5, 2.0, 1.0, 1.0],
+            arm_torque_limit=[30.0, 30.0, 30.0, 30.0, 10.0, 10.0],
+        )
+    )
+
+    goal_ee: GoalEEConfig = field(
+        default_factory=lambda: GoalEEConfig(
+            sphere_center=SphereCenter(
+                x_offset=0.0625,  # arm_base at x=0.0625 relative to A2 base_link
+                y_offset=0.0,
+                z_invariant_offset=0.750,  # Shoulder height (base 0.465 + armbase 0.1209 + 0.16452)
+            ),
+            # P7v3 reach 0.749 m: sample [0.28, 0.65] = 37%-87% reach, IK-verified safe.
+            pos_l=[0.28, 0.65],
+            pos_p=[np.radians(-60), np.radians(72)],  # pitch ±60°/72°
+            pos_y=[np.radians(-108), np.radians(108)],  # yaw ±108°
+            # Home keyframe FK (verified): end_link at [0.5m, 45°, 0°] from shoulder.
+            init_pos_start=[0.5, np.pi / 4.0, 0.0],
+            init_pos_end=[0.5, 0.0, 0.0],
+        )
+    )
+
+    domain_rand: PosForceDomainRandConfig = field(
+        default_factory=lambda: PosForceDomainRandConfig(
+            push_body_name="base_link",
+            added_mass_range=[0.0, 8.0],
+            com_offset_x=[-0.08, 0.08],
+            com_offset_y=[-0.08, 0.08],
+            com_offset_z=[-0.08, 0.08],
+            # UMI gripper mass ~0.3 kg already modeled; randomize payload 0-0.15 kg.
+            gripper_added_mass_range=[0.0, 0.15],
+        )
+    )
+
+    commands: PosForceCommandsConfig = field(
+        default_factory=lambda: PosForceCommandsConfig(
+            # Force curriculum aligned with UniFP ground truth (memory: base force OFF).
+            force_start_step=192000,  # 8000 iter × 24 steps
+            # Gripper EE force: raise to ±30 N (UniFP used ±60, baseline tested ±18).
+            max_push_force_xyz_gripper_cmd=[-30.0, 30.0],
+            max_push_force_xyz_gripper_ext=[-30.0, 30.0],
+            # Base force: keep magnitudes but disable via prob=0 (align UniFP line 129).
+            max_push_force_xyz_base_cmd=[-60.0, 60.0],
+            max_push_force_xyz_base_ext=[-50.0, 50.0],
+            base_forced_prob_cmd=0.0,
+            base_forced_prob_ext=0.0,
+        )
+    )
+
+
+@registry.env("A2ArmV2PosForce", sim_backend="mujoco")
+class A2ArmV2PosForceEnv(Go2ArmPosForceEnv):
+    """A2 + P7v3 (7-DOF, joint7 frozen) + UMI v3 gripper pos-force task.
+
+    Identical logic to Go2ArmPosForceEnv; the A2ArmV2 MJCF mirrors the sensor/geom/
+    ordering contract, so only the config differs (PD gains, sphere center, reach).
+    """
+
+    _cfg: A2ArmV2PosForceCfg
