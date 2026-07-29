@@ -1,0 +1,28 @@
+<mujoco model="simtoolreal_hammer_single">
+  <!--
+    Single handle+head object (cuboid hammer). Values come from the SimToolReal
+    pool generator with seed=42, shuffle=False, i.e. pool[0] of the first
+    matching ObjectSizeDistribution (object_size_distributions.py:88-99):
+      handle_scale   = (0.24630474692314314, 0.021682799299900978, 0.017424430711419206)
+      head_scale     = (0.0479264685607898, 0.08752674564408842, 0.03238110465145311)
+      handle_density = 412.36203565420874
+      head_density   = 837.7150228240811
+    Mass/inertia follow generate_objects.py:219-231 (parallel-axis shift to the
+    composite COM). Only the handle bbox feeds the `phi` observation scale
+    (migration guide section 2), which is why the handle geom is named
+    `object_handle` and read back via get_geom_size().
+
+    Task T8 replaces this single object with the 1200-entry pool.
+  -->
+  <worldbody>
+    <body name="object" pos="0 0 0.63">
+      <freejoint name="object_joint"/>
+      <inertial pos="0.11001550408820636 0 0" mass="0.15216298934657949"
+        diaginertia="8.5061808519731788e-05 0.00084775546773497451 0.00091099004743392298"/>
+      <geom name="object_handle" type="box" size="0.12315237346157157 0.010841399649950489 0.008712215355709603"
+        friction="0.5 0.005 0.0001" rgba="0.55 0.27 0.07 1.0"/>
+      <geom name="object_head" type="box" size="0.023963234280394902 0.043763372822044212 0.016190552325726554"
+        pos="0.14711560774196647 0 0" friction="0.5 0.005 0.0001" rgba="0.5 0.5 0.5 1.0"/>
+    </body>
+  </worldbody>
+</mujoco>

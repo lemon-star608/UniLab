@@ -1757,6 +1757,7 @@ _STANDARD_ENVS = [
     "G1WalkRough",
     "AllegroInhandRotation",
     "AllegroInhandRotationGrasp",
+    "SimToolReal",
 ]
 
 
