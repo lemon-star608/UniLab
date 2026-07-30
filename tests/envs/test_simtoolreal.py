@@ -443,12 +443,15 @@ def test_state_info_contract_keys_shapes_and_dtypes() -> None:
         np.testing.assert_allclose(info["closest_keypoint_max_dist"], -1.0)
         np.testing.assert_allclose(info["closest_fingertip_dist"], -1.0)
 
-        # prev_targets seeds from the default pose, not zeros (contract §2.1).
+        # prev_targets seeds from reset joint positions (with noise), not zeros (contract §2.1).
+        # After T4 completion, this includes the reset noise from build_reset_plan.
         assert np.any(info["prev_targets"] != 0.0)
-        np.testing.assert_allclose(
-            info["prev_targets"],
-            np.broadcast_to(env._default_joint_pos_backend, (num_envs, NUM_JOINTS)),
-        )
+        # Check that prev_targets is within joint limits (sanity check).
+        # prev_targets is in backend order, so use backend limits.
+        lower_backend = env._joint_lower_canon[env._perm_canon_to_backend]
+        upper_backend = env._joint_upper_canon[env._perm_canon_to_backend]
+        assert np.all(info["prev_targets"] >= lower_backend[None, :])
+        assert np.all(info["prev_targets"] <= upper_backend[None, :])
 
         # Trackers start cleared.
         np.testing.assert_array_equal(info["successes"], np.zeros(num_envs, dtype=np.int32))

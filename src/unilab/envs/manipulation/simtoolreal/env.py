@@ -306,17 +306,69 @@ class SimToolRealEnv(NpEnv):
         return np.zeros((self._num_envs, self._num_action), dtype=self._np_dtype)
 
     def update_state(self, state: NpEnvState) -> NpEnvState:
-        """Return the state unchanged. **T0 stub.**
+        """Update observations, rewards, termination, and episode lifecycle (T4 partial).
 
-        Observations (T2), reward and ``d*`` progress (T3), success/goal advance
-        and termination (T4) all land here later.
+        T4 adds the episode lifecycle: tolerance curriculum, success detection,
+        goal advance, and termination conditions. T2 (observations), T3 (rewards),
+        and T5 (keypoint computation) are still stubs or will be integrated later.
 
         Args:
             state: Current env state.
 
         Returns:
-            The same state instance, unmodified.
+            The updated state instance.
         """
+        # ──────────────────────────────────────────────────────────────────────
+        # T4: Tolerance curriculum (before success detection)
+        # ──────────────────────────────────────────────────────────────────────
+        from .episode_lifecycle import (
+            advance_goal_on_success,
+            compute_success,
+            compute_terminations,
+            update_tolerance_curriculum,
+        )
+
+        update_tolerance_curriculum(self)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # T5: Compute keypoints and keypoint_max_dist (needed for success detection)
+        # Placeholder: assume T5 has been integrated or stub it here.
+        # ──────────────────────────────────────────────────────────────────────
+        # For now, compute keypoints here to unblock T4. T5 will provide the real impl.
+        from .keypoints import compute_keypoints_from_offsets, keypoint_max_dist
+
+        obj_pos = self.get_object_pos()
+        obj_quat = self.get_object_quat()
+        goal_pos = state.info["goal_pos"]
+        goal_quat = state.info["goal_quat"]
+
+        # Use fixed keypoint offsets for reward/success side.
+        obj_kp = compute_keypoints_from_offsets(obj_pos, obj_quat, self._keypoint_offsets_fixed)
+        goal_kp = compute_keypoints_from_offsets(goal_pos, goal_quat, self._keypoint_offsets_fixed)
+
+        keypoints_max_dist = keypoint_max_dist(obj_kp, goal_kp)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # T4: Success detection and goal advance
+        # ──────────────────────────────────────────────────────────────────────
+        is_success = compute_success(self, keypoints_max_dist)
+        advance_goal_on_success(self, is_success)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # T4: Termination conditions
+        # ──────────────────────────────────────────────────────────────────────
+        # Placeholder for _curr_fingertip_distances (T3/T5 responsibility).
+        if not hasattr(self, "_curr_fingertip_distances"):
+            self._curr_fingertip_distances = np.zeros(
+                (self._num_envs, NUM_FINGERTIPS), dtype=self._np_dtype
+            )
+
+        terminated, _ = compute_terminations(self, is_success)
+        state.terminated[:] = terminated
+
+        # T2/T3 stubs: observations and rewards are still zeros.
+        # These will be filled in by their respective tasks.
+
         return state
 
     # ------------------------------------------------------------------ #

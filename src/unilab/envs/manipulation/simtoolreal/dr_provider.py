@@ -36,6 +36,7 @@ from unilab.dr import (
 from unilab.dtype_config import get_global_dtype
 
 from .constants import NUM_FINGERTIPS, NUM_JOINTS
+from .goal_sampling import np_random_orientation, sample_absolute_goal
 
 # Sentinel for the d* progress trackers: -1 means "no history yet"
 # (migration guide §5).
@@ -68,10 +69,10 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
             )
 
     def build_reset_plan(self, env: Any, env_ids: np.ndarray) -> ResetPlan:
-        """Build the reset state and seed the ``state.info`` bus.
+        """Build the reset state with full pose randomization (T4 completion).
 
-        Writes the default robot pose (noise-free in T0; T4 adds the sampled
-        distribution) and the nominal object pose above the table.
+        Samples object/robot poses, table height, and first absolute goal. Tolerance
+        curriculum update is handled externally before reset (termination_utils.py:10-36).
 
         Args:
             env: Owning :class:`~.env.SimToolRealEnv`.
@@ -79,7 +80,7 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
 
         Returns:
             A :class:`~unilab.dr.types.ResetPlan` whose ``randomization`` is
-            ``None`` by design.
+            ``None`` by design (decision D5: no per-reset physics-param DR).
         """
         num_reset = int(len(env_ids))
         if num_reset == 0:
@@ -92,19 +93,109 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
             )
 
         reset_cfg = env.cfg.reset
-        object_z = float(reset_cfg.table_reset_z) + float(reset_cfg.table_object_z_offset)
+        goal_cfg = env.cfg.goal
+
+        # Import here to avoid circular dependency.
+        from .goal_sampling import sample_absolute_goal
 
         qpos = np.zeros((num_reset, env.nq), dtype=np.float64)
-        qpos[:, env._dof_pos_idx_canon] = env._default_joint_pos_canon.astype(np.float64)
-        qpos[:, env._obj_pos_slice] = np.asarray([0.0, 0.0, object_z], dtype=np.float64)
-        qpos[:, env._obj_quat_slice] = np.asarray([1.0, 0.0, 0.0, 0.0], dtype=np.float64)
-
         qvel = np.zeros((num_reset, env.nv), dtype=np.float64)
 
-        info_updates = self._build_info_updates(env, num_reset, object_z=object_z)
+        # ──────────────────────────────────────────────────────────────────────
+        # Robot DOF state: default pose + noise (reset_utils.py:200-221)
+        # ──────────────────────────────────────────────────────────────────────
+        default_pos = env._default_joint_pos_canon.astype(np.float32)
+        lower_canon = env._joint_lower_canon
+        upper_canon = env._joint_upper_canon
 
-        # Match the source by clearing cached external object wrenches on reset
-        # (reset_utils.py:400) and flushing the delay queues (:397-399).
+        reset_scale = np.zeros(NUM_JOINTS, dtype=np.float32)
+        reset_scale[:7] = float(reset_cfg.reset_dof_pos_random_interval_arm)
+        reset_scale[7:] = float(reset_cfg.reset_dof_pos_random_interval_fingers)
+
+        sampled_pos = lower_canon + (upper_canon - lower_canon) * np.random.rand(
+            num_reset, NUM_JOINTS
+        ).astype(np.float32)
+        joint_pos_canon = (
+            default_pos[None, :] * (1.0 - reset_scale[None, :])
+            + sampled_pos * reset_scale[None, :]
+        )
+        joint_pos_canon = np.clip(joint_pos_canon, lower_canon[None, :], upper_canon[None, :])
+
+        joint_vel_canon = np.random.uniform(
+            -float(reset_cfg.reset_dof_vel_random_interval),
+            float(reset_cfg.reset_dof_vel_random_interval),
+            (num_reset, NUM_JOINTS),
+        ).astype(np.float32)
+
+        qpos[:, env._dof_pos_idx_canon] = joint_pos_canon.astype(np.float64)
+        qvel[:, env._dof_vel_idx_canon] = joint_vel_canon.astype(np.float64)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # Table z height: randomized (reset_utils.py:223-270)
+        # ──────────────────────────────────────────────────────────────────────
+        table_z = float(reset_cfg.table_reset_z) + np.random.uniform(
+            -float(reset_cfg.table_reset_z_range),
+            float(reset_cfg.table_reset_z_range),
+            num_reset,
+        ).astype(np.float32)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # Object pose: random xy + table z offset + random orientation
+        # (reset_utils.py:271-302)
+        # ──────────────────────────────────────────────────────────────────────
+
+        if reset_cfg.fixed_start_pose is not None:
+            fixed = np.asarray(reset_cfg.fixed_start_pose, dtype=np.float32)
+            obj_pos = np.tile(fixed[:3], (num_reset, 1))
+            obj_quat = np.tile(fixed[3:], (num_reset, 1))
+        else:
+            noise = np.random.uniform(-1.0, 1.0, (num_reset, 3)).astype(np.float32)
+            obj_pos = np.stack(
+                [
+                    noise[:, 0] * float(reset_cfg.reset_position_noise_x),
+                    noise[:, 1] * float(reset_cfg.reset_position_noise_y),
+                    table_z
+                    + float(reset_cfg.table_object_z_offset)
+                    + noise[:, 2] * float(reset_cfg.reset_position_noise_z),
+                ],
+                axis=-1,
+            )
+            obj_quat = np_random_orientation(num_reset)
+
+        qpos[:, env._obj_pos_slice] = obj_pos.astype(np.float64)
+        qpos[:, env._obj_quat_slice] = obj_quat.astype(np.float64)
+
+        # Object init z for lifted-reward reference (reset_utils.py:301).
+        object_init_z = obj_pos[:, 2].copy()
+
+        # ──────────────────────────────────────────────────────────────────────
+        # First goal: absolute mode (reset_utils.py:391)
+        # ──────────────────────────────────────────────────────────────────────
+        goal_pos, goal_quat = sample_absolute_goal(
+            mins=goal_cfg.mins,
+            maxs=goal_cfg.maxs,
+            scale=float(goal_cfg.target_volume_region_scale),
+            n=num_reset,
+        )
+
+        # ──────────────────────────────────────────────────────────────────────
+        # Build info_updates with all tracker keys (contract §2)
+        # ──────────────────────────────────────────────────────────────────────
+        info_updates = self._build_info_updates_full(
+            env=env,
+            num_reset=num_reset,
+            joint_pos_backend=joint_pos_canon[:, env._perm_canon_to_backend],
+            object_init_z=object_init_z,
+            object_pos=obj_pos,
+            object_quat=obj_quat,
+            goal_pos=goal_pos,
+            goal_quat=goal_quat,
+            env_ids=env_ids,
+        )
+
+        # ──────────────────────────────────────────────────────────────────────
+        # Clear wrench cache + flush delay queues (reset_utils.py:397-401)
+        # ──────────────────────────────────────────────────────────────────────
         env._object_forces[env_ids] = 0.0
         env._object_torques[env_ids] = 0.0
         env._action_queue[env_ids] = 0.0
@@ -120,7 +211,7 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
         )
 
     def _build_info_updates(self, env: Any, num_reset: int, *, object_z: float) -> dict[str, Any]:
-        """Seed every ``state.info`` key from interface contract §2.
+        """Seed every ``state.info`` key from interface contract §2 (T0 minimal version).
 
         Args:
             env: Owning env instance.
@@ -164,6 +255,71 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
             "reward": np.zeros((n,), dtype=dtype),
             # Reward-term logging dict. Not per-env, so the base class copies the
             # reference verbatim (np_env.py:294-295) and T3 overwrites it wholesale.
+            "log": {},
+        }
+
+    def _build_info_updates_full(
+        self,
+        env: Any,
+        num_reset: int,
+        joint_pos_backend: np.ndarray,
+        object_init_z: np.ndarray,
+        object_pos: np.ndarray,
+        object_quat: np.ndarray,
+        goal_pos: np.ndarray,
+        goal_quat: np.ndarray,
+        env_ids: np.ndarray,
+    ) -> dict[str, Any]:
+        """Seed all ``state.info`` keys with full reset randomization (T4).
+
+        Args:
+            env: Owning env instance.
+            num_reset: Number of environments being reset.
+            joint_pos_backend: Sampled robot joint positions, backend order.
+            object_init_z: Object z coordinates for lifted-reward reference.
+            object_pos: Sampled object positions.
+            object_quat: Sampled object orientations (wxyz).
+            goal_pos: Sampled goal positions.
+            goal_quat: Sampled goal orientations (wxyz).
+            env_ids: Indices being reset, for prev_episode_successes transfer.
+
+        Returns:
+            Mapping of info key to freshly allocated per-env values.
+        """
+        dtype = get_global_dtype()
+        n = num_reset
+
+        object_scales = np.broadcast_to(env.resolve_object_scale(), (n, 3)).astype(dtype)
+
+        # Transfer prev_episode_successes from current successes (reset_utils.py:393).
+        # Guard: check both state existence AND key existence (first reset has no "successes" yet).
+        prev_episode_successes = np.zeros((n,), dtype=np.int32)
+        state = getattr(env, "_state", None)
+        if state is not None and "successes" in state.info:
+            prev_episode_successes[:] = state.info["successes"][env_ids]
+
+        return {
+            # §2.1 action / control — seed from noisy joint pose (reset_utils.py:219-220)
+            "prev_targets": joint_pos_backend.astype(dtype),
+            "cur_targets": joint_pos_backend.astype(dtype).copy(),
+            "last_actions": np.zeros((n, NUM_JOINTS), dtype=dtype),
+            "current_actions": np.zeros((n, NUM_JOINTS), dtype=dtype),
+            # §2.2 goal / episode
+            "goal_pos": goal_pos.astype(dtype),
+            "goal_quat": goal_quat.astype(dtype),
+            "successes": np.zeros((n,), dtype=np.int32),
+            "near_goal_steps": np.zeros((n,), dtype=np.int32),
+            "object_init_z": object_init_z.astype(dtype),
+            "lifted_object": np.zeros((n,), dtype=bool),
+            "prev_episode_successes": prev_episode_successes,
+            # §2.3 d* progress, sentinel = -1 (reset_utils.py:373-375,395)
+            "closest_keypoint_max_dist": np.full((n,), DSTAR_SENTINEL, dtype=dtype),
+            "closest_fingertip_dist": np.full((n, NUM_FINGERTIPS), DSTAR_SENTINEL, dtype=dtype),
+            # §2.4 observation / physics caches
+            "prev_object_pos": object_pos.astype(dtype),
+            "prev_object_quat": object_quat.astype(dtype),
+            "object_scales": object_scales,
+            "reward": np.zeros((n,), dtype=dtype),
             "log": {},
         }
 
