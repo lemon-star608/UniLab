@@ -344,6 +344,29 @@ class SimBackend(abc.ABC):
             f"{self.__class__.__name__} does not support interval body force perturbation"
         )
 
+    def apply_body_wrench(
+        self,
+        body_ids: np.ndarray,
+        force: np.ndarray,
+        torque: np.ndarray,
+    ) -> None:
+        """Apply world-frame force AND torque to specific bodies for the upcoming step.
+
+        This is the D6 extension for SimToolReal wrench DR, which requires both
+        force and torque (``set_external_force_and_torque`` in Isaac Lab).
+
+        Args:
+            body_ids: Body ids to perturb.
+            force: Force tensor with shape ``(num_envs, len(body_ids), 3)``.
+            torque: Torque tensor with shape ``(num_envs, len(body_ids), 3)``.
+
+        Returns:
+            None. The wrench is staged in ``xfrc_applied`` for the next step.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support body wrench perturbation"
+        )
+
     def get_play_capabilities(self) -> BackendPlayCapabilities:
         """Return backend-native play/render capabilities."""
         return BackendPlayCapabilities()
