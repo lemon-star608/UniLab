@@ -276,6 +276,11 @@ def compute_rewards(env: SimToolRealEnv, info: dict[str, np.ndarray]) -> np.ndar
     dtype = get_global_dtype()
     rew_cfg = env.cfg.reward
     term_cfg = env.cfg.termination
+    # success_steps lives on GoalCfg, not TerminationCfg — the source keeps it on
+    # TerminationCfg (cfg:437) but the contract regroups goal-side fields onto
+    # GoalCfg (§5.0). Reading it off term_cfg raises AttributeError on the real
+    # config; it only survived unit test because the mock cfg is a MagicMock.
+    goal_cfg = env.cfg.goal
 
     # 1. Lifting: progress + one-shot bonus + latch (source :99-107).
     lift_rew, lift_bonus_rew, new_lifted = lifting_reward(
@@ -320,7 +325,7 @@ def compute_rewards(env: SimToolRealEnv, info: dict[str, np.ndarray]) -> np.ndar
         near_goal=env._near_goal,
         is_success=env._is_success,
         reach_goal_bonus_value=rew_cfg.reach_goal_bonus,
-        success_steps=term_cfg.success_steps,
+        success_steps=goal_cfg.success_steps,
         force_consecutive=term_cfg.force_consecutive_near_goal_steps,
     )
 

@@ -503,8 +503,9 @@ def test_instance_attribute_contract() -> None:
 def test_step_zeros_runs_without_nan() -> None:
     """``env.step(zeros)`` survives 10 steps with finite obs/reward.
 
-    The T0 stubs mean control is all zeros and ``update_state`` is a pass-through,
-    so this only checks that the scene, actuators, and reset path are wired up.
+    T7 replaced the T0 stubs, so ``apply_action`` now returns the smoothed PD
+    targets rather than zeros and ``update_state`` writes obs/reward/terminated.
+    Both hooks still mutate and return the same state instance.
     """
     num_envs = 2
     env = _make_env(num_envs=num_envs)
@@ -518,11 +519,16 @@ def test_step_zeros_runs_without_nan() -> None:
                 assert np.all(np.isfinite(values)), f"non-finite {group} at step {step_index}"
             assert np.all(np.isfinite(state.reward)), f"non-finite reward at {step_index}"
 
-        # apply_action is a documented zero stub for T0.
-        np.testing.assert_array_equal(
-            env.apply_action(actions, state), np.zeros((num_envs, NUM_JOINTS))
-        )
-        # update_state is a documented pass-through for T0.
+        # apply_action returns backend-order PD targets, inside the joint limits.
+        ctrl = env.apply_action(actions, state)
+        assert ctrl.shape == (num_envs, NUM_JOINTS)
+        assert np.all(np.isfinite(ctrl))
+        limit_lower = np.concatenate([env._arm_lower, env._hand_lower])
+        limit_upper = np.concatenate([env._arm_upper, env._hand_upper])
+        assert np.all(ctrl >= limit_lower - 1e-5)
+        assert np.all(ctrl <= limit_upper + 1e-5)
+
+        # update_state mutates in place and returns the same instance.
         assert env.update_state(state) is state
     finally:
         env.close()

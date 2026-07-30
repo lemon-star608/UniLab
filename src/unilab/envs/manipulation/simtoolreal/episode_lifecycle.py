@@ -18,7 +18,27 @@ import numpy as np
 from .goal_sampling import sample_delta_goal
 
 if TYPE_CHECKING:
+    from unilab.base.np_env import NpEnvState
+
     from .env import SimToolRealEnv
+
+
+def _require_state(env: SimToolRealEnv) -> NpEnvState:
+    """Return ``env._state``, asserting it has been initialized.
+
+    ``NpEnv._state`` is ``Optional``, so every read needs narrowing. The base
+    class uses the same ``assert`` idiom (np_env.py:178,248). ``update_state``
+    only ever runs after ``init_state``, so this cannot fire in the step loop.
+
+    Args:
+        env: Owning env instance.
+
+    Returns:
+        The live :class:`~unilab.base.np_env.NpEnvState`.
+    """
+    state = env._state
+    assert state is not None, "episode lifecycle called before init_state()"
+    return state
 
 
 def update_tolerance_curriculum(env: SimToolRealEnv) -> None:
@@ -46,11 +66,13 @@ def update_tolerance_curriculum(env: SimToolRealEnv) -> None:
     term_cfg = env._cfg.termination
 
     if env._frame_counter - env._last_curriculum_update >= term_cfg.tolerance_curriculum_interval:
-        prev_successes = env._state.info["prev_episode_successes"].astype(np.float32)
+        prev_successes = _require_state(env).info["prev_episode_successes"].astype(np.float32)
         threshold = float(term_cfg.tolerance_curriculum_success_threshold)
 
         if prev_successes.size > 0 and prev_successes.mean() >= threshold:
-            new_tol = env._current_success_tolerance * float(term_cfg.tolerance_curriculum_increment)
+            new_tol = env._current_success_tolerance * float(
+                term_cfg.tolerance_curriculum_increment
+            )
             new_tol = max(
                 min(new_tol, float(env._cfg.goal.success_tolerance)),
                 float(env._cfg.goal.target_success_tolerance),
@@ -77,12 +99,18 @@ def compute_success(env: SimToolRealEnv, keypoints_max_dist: np.ndarray) -> np.n
         env: Owning env. Reads and mutates ``state.info["near_goal_steps"]``.
         keypoints_max_dist: Max keypoint distance per env, shape ``(N,)``.
 
+    **Side effect**: publishes ``env._near_goal`` and ``env._is_success``, which
+    the reward's ``reach_goal_bonus`` reads (rewards.py:320-321). The source sets
+    both as env attributes at the same point (obs_utils.py:196,202); without the
+    publish the reach bonus would read the stale zeros allocated at init and stay
+    permanently 0.
+
     Returns:
         Boolean mask of shape ``(N,)`` indicating success.
     """
     term_cfg = env._cfg.termination
     goal_cfg = env._cfg.goal
-    info = env._state.info
+    info = _require_state(env).info
 
     # ★ Multiply by keypoint_scale (easy-to-miss item, guide §6).
     # keypoint_scale is on GoalCfg, not RewardCfg (contract §5.0 regrouping).
@@ -101,6 +129,10 @@ def compute_success(env: SimToolRealEnv, keypoints_max_dist: np.ndarray) -> np.n
         ng_steps += near_goal.astype(np.int32)
 
     is_success = ng_steps >= goal_cfg.success_steps
+
+    # Publish for the reward's reach bonus (obs_utils.py:196,202).
+    env._near_goal = near_goal
+    env._is_success = is_success
     return is_success
 
 
@@ -122,7 +154,7 @@ def advance_goal_on_success(env: SimToolRealEnv, is_success: np.ndarray) -> None
     if success_ids.size == 0:
         return
 
-    info = env._state.info
+    info = _require_state(env).info
     goal_cfg = env._cfg.goal
 
     # Increment successes (termination_utils.py:46).
@@ -160,7 +192,9 @@ def advance_goal_on_success(env: SimToolRealEnv, is_success: np.ndarray) -> None
     info["steps"][success_ids] = 0
 
 
-def compute_terminations(env: SimToolRealEnv, is_success: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def compute_terminations(
+    env: SimToolRealEnv, is_success: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """Compute terminated and truncated masks (termination_utils.py:39-72).
 
     Termination causes (none include success per D2):
@@ -195,7 +229,8 @@ def compute_terminations(env: SimToolRealEnv, is_success: np.ndarray) -> tuple[n
 
     # Max consecutive successes (termination_utils.py:57-60).
     if term_cfg.max_consecutive_successes > 0:
-        max_successes_reached = env._state.info["successes"] >= term_cfg.max_consecutive_successes
+        successes = _require_state(env).info["successes"]
+        max_successes_reached = successes >= term_cfg.max_consecutive_successes
     else:
         max_successes_reached = np.zeros(n, dtype=bool)
 

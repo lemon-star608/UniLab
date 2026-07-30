@@ -36,6 +36,7 @@ from unilab.dr import (
 from unilab.dtype_config import get_global_dtype
 
 from .constants import NUM_FINGERTIPS, NUM_JOINTS
+from .dr_wrench import sample_log_uniform
 from .goal_sampling import np_random_orientation, sample_absolute_goal
 
 # Sentinel for the d* progress trackers: -1 means "no history yet"
@@ -95,9 +96,6 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
         reset_cfg = env.cfg.reset
         goal_cfg = env.cfg.goal
 
-        # Import here to avoid circular dependency.
-        from .goal_sampling import sample_absolute_goal
-
         qpos = np.zeros((num_reset, env.nq), dtype=np.float64)
         qvel = np.zeros((num_reset, env.nv), dtype=np.float64)
 
@@ -116,8 +114,7 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
             num_reset, NUM_JOINTS
         ).astype(np.float32)
         joint_pos_canon = (
-            default_pos[None, :] * (1.0 - reset_scale[None, :])
-            + sampled_pos * reset_scale[None, :]
+            default_pos[None, :] * (1.0 - reset_scale[None, :]) + sampled_pos * reset_scale[None, :]
         )
         joint_pos_canon = np.clip(joint_pos_canon, lower_canon[None, :], upper_canon[None, :])
 
@@ -201,6 +198,29 @@ class SimToolRealDRProvider(DomainRandomizationProvider):
         env._action_queue[env_ids] = 0.0
         env._obs_queue[env_ids] = 0.0
         env._object_state_queue[env_ids] = 0.0
+
+        # ──────────────────────────────────────────────────────────────────────
+        # Per-reset DR resample (reset_utils.py:408-418)
+        # ──────────────────────────────────────────────────────────────────────
+        # The source redraws the wrench trigger probabilities and the object-extent
+        # noise on **every** reset, not once at init. T7's __init__ only seeds them.
+        dr = env.cfg.domain_randomization
+        env._random_force_prob[env_ids] = sample_log_uniform(
+            dr.force_prob_range[0], dr.force_prob_range[1], num_reset
+        )
+        env._random_torque_prob[env_ids] = sample_log_uniform(
+            dr.torque_prob_range[0], dr.torque_prob_range[1], num_reset
+        )
+        scale_lo, scale_hi = dr.object_scale_noise_multiplier_range
+        env._object_scale_multiplier[env_ids] = np.random.uniform(
+            scale_lo, scale_hi, (num_reset, 3)
+        ).astype(get_global_dtype())
+
+        # The lifted latch also drives the next step's wrench gate, and
+        # apply_action reads the cache before update_state refreshes it. Clearing
+        # it here keeps a freshly reset env from inheriting the old episode's
+        # latch (source equivalent: reset_utils.py:396 clears _lifted_object).
+        env._state_cache_lifted_object[env_ids] = False
 
         return ResetPlan(
             env_ids=env_ids,

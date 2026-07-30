@@ -115,8 +115,10 @@ class TestLiftingReward:
     def test_lift_rew_zeroes_after_lifted(self) -> None:
         """Once lifted, lift_rew becomes zero (source :22, *(~lifted))."""
         # Use object_z below threshold for "before lift" case
-        object_z_before = np.array([0.5], dtype=np.float32)  # z_lift = 0.05 + 0.1 = 0.15 (not > 0.15)
-        object_z_after = np.array([0.6], dtype=np.float32)   # z_lift = 0.05 + 0.2 = 0.25 (> 0.15)
+        object_z_before = np.array(
+            [0.5], dtype=np.float32
+        )  # z_lift = 0.05 + 0.1 = 0.15 (not > 0.15)
+        object_z_after = np.array([0.6], dtype=np.float32)  # z_lift = 0.05 + 0.2 = 0.25 (> 0.15)
         object_init_z = np.array([0.4], dtype=np.float32)
 
         # Before lift (z_lift = 0.15, exactly at threshold but not > threshold)
@@ -488,7 +490,11 @@ class TestComputeRewards:
         env.cfg.reward.kuka_actions_penalty_scale = 0.03  # Positive, negated in function
         env.cfg.reward.hand_actions_penalty_scale = 0.003  # Positive, negated in function
         env.cfg.reward.reach_goal_bonus = 1000.0
-        env.cfg.termination.success_steps = 10
+        # success_steps is on GoalCfg, not TerminationCfg (contract §5.0). The
+        # source keeps it on TerminationCfg (cfg:437), but this port regroups
+        # goal-side fields. Pinning it on termination let compute_rewards read a
+        # bare MagicMock, which numpy broadcasts as shape (0,) — the bug T7 hit.
+        env.cfg.goal.success_steps = 10
         env.cfg.termination.force_consecutive_near_goal_steps = False
 
         env._object_pos = np.zeros((num_envs, 3), dtype=np.float32)
