@@ -1,6 +1,6 @@
 # SimToolReal → UniLab 迁移交接文档
 
-**日期**：2025-01-30  
+**日期**：2026-08-03  
 **状态**：Env 层迁移完成（T0-T7），训练配置待启动（T8-T12）  
 **当前分支**：`feat/simtoolreal-t0-env-skeleton`  
 **当前 commit**：`0cbd1ca7` ("T7: Integrate all modules into apply_action/update_state")
@@ -227,4 +227,4 @@ scripts/train_rsl_rl.py                   # 训练入口（已存在）
 ---
 
 *交接文档版本：v1.0*  
-*最后更新：2025-01-30*
+*最后更新：2026-08-03*
