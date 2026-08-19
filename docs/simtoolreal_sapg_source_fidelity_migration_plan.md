@@ -1,6 +1,6 @@
 # SimToolReal SAPG Source-Fidelity Migration Implementation Plan
 
-> **For agentic workers:** This umbrella is planning-only. After the maintainer approves one named child issue, write/execute only that child's standalone plan with `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans`; never execute this umbrella sequentially. Checkboxes below describe the first three child plans, not blanket authorization.
+> **For agentic workers:** The maintainer set a target of about ten code commits in section 7 on 2026-08-19; planning and audit-document commits are not counted. Execute only the currently authorized code batch with `superpowers:subagent-driven-development`, preserving every internal RED/GREEN and review gate even when several former child issues share one commit. The larger batch sizes are a migration-specific planning exception, not blanket authorization for later public contracts, production execution paths or support promotion.
 
 **Goal:** 在 UniLab 的 MuJoCo SimToolReal 任务上直接运行固定 Source fork 的 RL-Games SAPG，使 SAPG 网络、rollout、augmentation、更新、AMP、checkpoint 和 player 语义以 Source 为唯一 oracle；算法边界以下只保留已经明确批准的 MuJoCo/task/resource 差异。
 
@@ -12,21 +12,21 @@
 
 ## Owner summary
 
-决策记录（2026-08-19）：maintainer 已接受“固定 Source RL-Games runtime + 同步 `NpEnv` adapter”成为 SAPG 唯一路径，并接受对应的长期 fork 成本。本路线只做 MuJoCo SimToolReal SAPG，复用 donor task/assets 并以 frozen oracle 锁定算法与 task 数学；不做 PPO、Motrix、sim2sim、async、distributed 或 export。当前明细为 37 个 UniLab PR，另有 MuJoCoUni `M0-dev` 与 `M0-release` 两个外部 gate。永久成本是维护 72-file fork、兼容补丁、adapter、task 与 golden tests。
+决策记录（2026-08-19）：maintainer 已接受“固定 Source RL-Games runtime + 同步 `NpEnv` adapter”成为 SAPG 唯一路径，并接受对应的长期 fork 成本。本路线只做 MuJoCo SimToolReal SAPG，复用 donor task/assets 并以 frozen oracle 锁定算法与 task 数学；不做 PPO、Motrix、sim2sim、async、distributed 或 export。实施历史目标为约 10 个代码型 commit；规划和审计文档提交不计数。另有 MuJoCoUni `M0-dev` 与 `M0-release` 两个外部 gate。永久成本是维护 72-file fork、兼容补丁、adapter、task 与 golden tests。
 
-本文件是可跟踪的 umbrella roadmap；上述架构决策不构成 37 个 child 的批量实施授权。任何 child issue 开始前仍需按 `AGENTS.md` 单独确认；完成一个 child 后不得自动进入下一个。
+同日 maintainer 进一步明确要求大步推进并以约 10 个代码型 commit 完成迁移。该决定把原 37-child roadmap 收敛为 section 7 的 10 个 code commit，并接受列明批次可超过默认 file/LOC/PR 规模；它不授权额外算法、backend 或 support scope，也不允许跳过原 child 的内部 oracle/gate。当前明确执行授权是 code commit 2。Code commit 6 的新 backend public contracts、code commit 9 的 production Runner path 和 code commit 10 的 support promotion 仍须按根 `AGENTS.md` 分别确认。
 
 ## Execution and review protocol
 
-每个 child 使用两个串行角色，且同一工作树任一时刻只有一个 writer：
+每个 commit batch 使用两个串行角色，且同一工作树任一时刻只有一个 writer：
 
-1. 控制/审查 session 固定 child scope，生成只覆盖该 child 的完整 prompt，并独占 branch、staging area、commit 与 PR 历史。启动实现 session 后，控制 session 在收到交接前不得同时编辑工作树。
-2. 实现 session 只允许修改 prompt 明列的文件并执行 focused tests；所有 Python 命令使用 `uv run`，所有手工编辑使用 `apply_patch`。它不得执行 `git add`、`git commit`、`git push`、创建 PR、`stash`、`reset`、`clean` 或切换 branch，也不得自动进入下一 child。
+1. 控制/审查 session 固定当前 commit scope，生成只覆盖该 batch 的完整 prompt，并独占 branch、staging area、commit 与 PR 历史。启动实现 session 后，控制 session 在收到交接前不得同时编辑工作树。
+2. 实现 session 只允许修改 prompt 明列的文件并执行 focused tests；所有 Python 命令使用 `uv run`，所有手工编辑使用 `apply_patch`。它不得执行 `git add`、`git commit`、`git push`、创建 PR、`stash`、`reset`、`clean` 或切换 branch，也不得自动进入下一 commit batch。一个 batch 合并多个旧 child 时，仍须按旧 child 顺序逐段保留 RED/GREEN 证据。
 3. 实现 session 完成后必须停止写入并报告：改动文件、`git status --short`、`git diff --stat`、完整验证命令及结果、已知缺口和 blocker。测试失败、skip 或未验证平台必须如实列出，不能用预期结果代替实际结果。
-4. 控制 session 独立阅读完整 diff，按 child spec 做 scope/spec review，再做代码质量、provenance 与近风险验证。发现问题时先把具体反馈交回同一实现 session 修正并重新交接；有未关闭问题时不得提交。
-5. 只有控制 session 可以精确 stage 本 child 的文件并 commit。最终 commit 后、创建或更新 PR 前，由控制 session 按根 `AGENTS.md` 运行 `make test-all`、复跑 child 的关键 gate 并确认工作树干净；任何后续改动都会使旧验证失效。
+4. 控制 session 独立阅读完整 diff，按 batch scope 和其中每个内部 gate 做 scope/spec review，再做代码质量、provenance 与近风险验证。发现问题时先把具体反馈交回同一实现 session 修正并重新交接；有未关闭问题时不得提交。
+5. 只有控制 session 可以精确 stage 当前 batch 的文件并 commit。最终 commit 后，由控制 session 复跑当前 batch 的关键 gate 并确认工作树干净。`make test-all` 在 production execution path 暴露前和最终 PR 前运行；V1 vendor commit 后已知的 roadmap-future-path 单一失败由 maintainer 明确 override，但最终 HEAD 不允许保留该 override。
 
-子代理或额外 reviewer 可以辅助 spec/code-quality review，但不能代替控制 session 对最终 diff、测试证据和 commit 内容负责。用户把某个 child prompt 交给实现 session，即只授权该 child；不会连带授权依赖链中的下一个 child。
+子代理或额外 reviewer 可以辅助 spec/code-quality review，但不能代替控制 session 对最终 diff、测试证据和 commit 内容负责。实现 session 的写权限始终只覆盖当前 prompt；控制 session 只能在已有授权覆盖下一批时继续，否则必须停在对应确认点。
 
 ## 1. 固定基线与已有证据
 
@@ -338,112 +338,109 @@ M0-release 在任务 train/play 和 parity 跑通后处理：以固定 0.4 代�
 
 M0-release 不阻塞算法 oracle、env 接线或 S1 smoke，只阻塞 D1 的最终依赖晋升和 support claim。D1 将 root lock 从 M0-dev SHA 切换到正式 artifact并重跑完整 gate。若 MuJoCoUni 需要生产修改，必须在 MuJoCoUni owner 仓库另写/批准 roadmap；本 umbrella 不隐含授权该外部开发。
 
-## 7. Child issue 路线图
+## 7. 拟议的十个代码提交执行路线图
 
-### 7.1 最近三个可执行 issue
+### 7.1 Commit map
 
-| 顺序 | 单一结果 | 规模 | 依赖 |
-|---|---|---:|---|
-| V1 | 固定 Source RL-Games pristine snapshot、provenance 与 formatter/Git-whitespace isolation | 72 个机械复制 Python + 6 metadata + root `pyproject.toml`、`.gitattributes` + 2 audit/test；≤850 net 手写 LOC，1 PR | 无 |
-| V2a | Python 3.10–3.13/Gymnasium compatibility + pristine/patched hash audit | ≤15 total files、≤700 net 手写 LOC、1 PR；14 named paths，最多 1 个 contingency path | V1 |
-| V2b | 锁定 network/config golden | 6 files、≤800 net 手写 LOC、1 PR；fixture bytes 单列且≤8 MiB | V2a |
+| Code # | 状态 | Commit 结果 | 内部 gate / 依赖 |
+|---:|---|---|---|
+| 1 | 已完成 | `vendor: pin SimToolReal RL-Games runtime` | V1；72/72 pristine Python blobs；SHA `ed9c0ae5` |
+| 2 | 已授权、下一步 | `fix: make RL-Games compatible and lock network fidelity` | V2a → V2b；dual-hash/Python/Gymnasium ABI 后立即验证 network/config |
+| 3 | 待执行 | `test: lock SAPG rollout and RNG semantics` | O1a；timeout/GAE/augmentation/follower TD/shuffle/RNG |
+| 4 | 待执行 | `test: lock SAPG update and AMP semantics` | O1b；loss/minibatch/KL/optimizer/GradScaler/overflow |
+| 5 | 待执行 | `test: lock SAPG checkpoint and player semantics` | O1c；payload/resume boundary/6-env 与 N≠6 player routing |
+| 6 | 待执行 | `feat(backend): add SimToolReal MuJoCo runtime contracts` | M0-dev + B1/B2/B3；source-model、body wrench、autoreset public contracts |
+| 7 | 待执行 | `feat(simtoolreal): add assets, task foundations, and Source oracle` | A0a/A0b + E1–E8 + T0；仍不注册真实 env |
+| 8 | 待执行 | `feat(simtoolreal): compose MuJoCo env and lock task parity` | E9/E10 + T1；真实 600-tool pool、registry、`NpEnv` contract |
+| 9 | 待执行 | `feat: integrate Source RL-Games SAPG runtime` | R1–R4；`sapg` extra、Hydra owners、adapter、原生 Runner、tracker、`.pth`、player、CLI |
+| 10 | 待执行 | `release: promote SimToolReal SAPG support` | S1 on M0-dev → 外部 M0-release → D1、最终 lock/docs/support |
 
-这三个 issue 结束时还没有 production training path，也不会修改 root optional dependencies。
+已有两个 docs commit `60bc034a`、`f5200a90` 和本次 roadmap 修订都不计入上表。旧 V/O/A/B/T/E/R/S/D ID 继续作为测试与审查 gate 名称，但不再分别对应 PR。
 
-### 7.2 后续方向与启动条件
+### 7.2 批次规模的显式例外
 
-| 组 | Child issues | 单一结果 | 启动条件 |
-|---|---|---|---|
-| Runtime prerequisite | M0-dev | 固定 0.4 `7205e07`，提供 mixed-layout + autoreset，`cpu_ids=null` | 不计 UniLab PR；真实 B1/B3 与 S1 前 |
-| Runtime prerequisite | M0-release | 正式 artifact 补齐 0.3.1 CPU affinity contract | 不计 UniLab PR；只阻塞 D1/final support |
-| Algorithm oracle | O1a/O1b/O1c | rollout/return/shuffle/RNG；loss/update/AMP；checkpoint/resume/player parity | V2b 后顺序执行；每项≤5 files、≤800 net 手写 LOC、1 PR；fixture cap 依次为 8/8/2 MiB |
-| Assets | A0a/A0b | meshes + license/provenance；两个生产 XML + compile validation | A0a 仅 meshes 为机械例外；不迁移 generator |
-| Backend | B1/B3 | source-model variant；autoreset mask | M0-dev 是真实路径 gate；每个独立 PR |
-| Backend | B2 | public body wrench + MuJoCo `xfrc_applied` | 不依赖 M0-dev/M0-release；独立 PR |
-| Task oracle | T0/T1 | 捕获 backend-neutral Source task fixture；验证 donor action/obs/reward/termination/reset/DR parity | T0 可与 V1 并行但需要可运行 Source；T1 依赖 T0 + E10 |
-| Env foundations | E1a/b、E2/E3、E4a/b、E5、E6a/b、E7a/b/c、E8a/b | config/constants、catalog/materializer、delay/action、goal/lifecycle、keypoints、reward、obs、reset/DR | A0b；按 donor tests 分片 |
-| Env owner | E9/E10 | `SimToolRealEnv`；registry/Hydra task integration | B1–B3 + 全部 env foundations |
-| Adapter | R1 | fake `NpEnv` 下完整 RL-Games ABI | V2b；可与 O1 并行，不等真实 env |
-| Config | R2 | Source-native Hydra config + 12k resource profile | O1c + E10 |
-| Runner | R3a/R3b/R3c | 原生 Runner path；tracker/W&B lifecycle；可信 `.pth` resolver/resume modes | R1/R2；每项独立 PR且新 training path 单独批准 |
-| Player | R4 | Source-native player/play 与 RNN state | R3a + R3c；不含 export |
-| Acceptance | S1 | MuJoCo train/play smoke、finite/loss/profile evidence | M0-dev + R3b + R4 + T1 |
-| Docs/support | D1 | 正式 MuJoCoUni pin、用户命令、已知限制、support claim | M0-release + S1 + `make test-all` + maintainer approval |
+这次 maintainer approval 允许下列大批次超过根 `AGENTS.md` 的默认 15-file/800-LOC 上限；估算用于发现意外扩张，不是删除测试来满足数字的硬 cap：
 
-完整依赖链如下；`child <- prerequisites` 表示右侧全部满足后才能启动左侧。每个 child ID 恰好对应一个 PR：
+| Code # | 预计规模 | 被批准的机械/集成例外 |
+|---:|---:|---|
+| 2 | 约 20 paths，约 1,500 handwritten LOC，network fixture 不超过 8 MiB | 7 个最小 compatibility patch、dual-hash audit和隔离 network/config capture-replay |
+| 3 | 5 paths，约 800 handwritten LOC，fixture 不超过 8 MiB | O1a 独立 generator/harness/test/manifest |
+| 4 | 5 paths，约 800 handwritten LOC，fixture 不超过 8 MiB | O1b 独立 generator/harness/test/manifest；canonical CUDA 实跑 |
+| 5 | 5 paths，约 800 handwritten LOC，fixture 不超过 2 MiB | O1c 独立 generator/harness/test/manifest |
+| 6 | 约 11 paths，约 800 handwritten/test LOC + generated lock | 三个 public backend contract 与 M0-dev provenance |
+| 7 | 42 meshes + 2 XML + 3 license/provenance files；14 个 production task modules、约 13 个 focused test modules、3 个 T0 generator/fixture files；约 7–8k donor LOC | 资产和成熟 donor task primitives 的机械移植；手写 provenance/adaptation 约 650–1,000 LOC |
+| 8 | `env.py`、registration、composition/T1 tests；约 2k donor/test LOC | 799-line env 机械移植，手写 adaptation 约 200 LOC |
+| 9 | 约 25 paths，约 3–4k handwritten LOC + generated lock | 一个完整但边界封闭的 native Runner vertical slice |
+| 10 | release manifest/lock/audit/support/docs | 只在真实 smoke 与外部 M0-release 后晋升 support |
+
+例外不适用于未列出的 Motrix、PPO、async、distributed、export、sim2sim、通用 RL-Games support 或 MuJoCoUni 源码开发。某批出现新的 production owner、公共 contract、fixture rebaseline、未声明 third-party patch，或规模相对表中估算发生实质增长时，控制 session 必须先停下审查 scope，而不是用“大步推进”解释。Code commits 6、9、10 的规模例外只有在对应 execution authorization 到位后才生效。
+
+### 7.3 不可调换的依赖
 
 ```text
-V1: none
-V2a <- V1
-V2b <- V2a
+2 compatibility/dual-hash -> network/config
+  -> 3 rollout/RNG
+  -> 4 update/AMP
+  -> 5 checkpoint/player
 
-O1a <- V2b
-O1b <- O1a
-O1c <- O1b
+6 M0-dev/backend contracts
+  -> 7 assets/task foundations/T0
+  -> 8 env composition/E10/T1
 
-A0a: none
-A0b <- A0a
-
-B1 <- M0-dev
-B2: none
-B3 <- M0-dev
-
-T0 <- runnable Source oracle
-T1 <- T0 + E10
-
-E1a <- A0b
-E1b <- A0b + E1a
-E2 <- A0b
-E3 <- A0b + E1b
-E4a <- A0b
-E4b <- A0b + E1b + E4a + E8a
-E5 <- A0b + E1b
-E6a <- A0b
-E6b <- A0b + E6a
-E7a <- A0b + E1b + E3 + E5
-E7b <- A0b + E7a
-E7c <- A0b + E7b
-E8b <- A0b + B2
-E8a <- A0b + E8b + E4a + E7c
-E9 <- B1 + B2 + B3 + all env foundations
-E10 <- E9
-
-R1 <- V2b
-R2 <- O1c + E10
-R3a <- R1 + R2 + maintainer execution-path approval
-R3b <- R3a
-R3c <- R1 + R2
-R4 <- R3a + R3c
-S1 <- M0-dev + R3b + R4 + T1
-D1 <- M0-release + S1 + make test-all + maintainer support approval
+5 + 8 + code-9 execution-path approval
+  -> 9 config/adapter/native Runner/tracker/checkpoint/player/CLI
+  -> S1 small smoke -> 12288/2048 profile
+  -> external M0-release
+  -> 10 dependency promotion
+  -> final make test-all and release verification
+  -> maintainer support approval
+  -> support matrix/docs claim
 ```
 
-Donor env 拆分预算：
+- Compatibility 必须先于任何 Target fixture replay，否则 patched identity 无法归因。Code commit 2 内先完成 V2a RED/GREEN，再生成并重放 V2b network fixture；network golden 是 compatibility 未改变网络语义的提交内证据。
+- Code commits 3、4、5 分别锁定 O1a/O1b/O1c，不能 squash；O1b 的 AMP/GradScaler/overflow 必须在 canonical CUDA 平台真实执行，CPU 或 skip 不算通过。
+- Commit 6、7、8 不能再合并：backend public surface、backend-neutral task math、真实 env composition 是三个不同风险边界。
+- Commit 9 不得反向修改 vendor 或 rebaseline oracle；原生 Source `Runner` 唯一拥有 rollout/update/checkpoint/player lifecycle。
+- Commit 9 与 10 不得合并：必须先在 M0-dev 上得到 S1，再由外部 M0-release 晋升依赖与 support claim。
 
-| Issue | 生产 owner | 预计规模 |
-|---|---|---:|
-| E1a | `constants.py` + constant/layout tests | 280 production + ≤300 test LOC |
-| E1b | `config.py`、staged `__init__.py` + config validation tests | 460 production + ≤300 test LOC |
-| E2 | `tool_catalog.py`、`tool_assets.py` + tests | 4 files，约 690 LOC |
-| E3 | `delay_buffer.py`、`action_pipeline.py` + `test_action_pipeline.py` | 3 files，761 donor LOC；依赖 E1b（test imports config/constants） |
-| E4a | `goal_sampling.py` + `test_goal_sampling.py` | 2 files，273 donor LOC |
-| E4b | `episode_lifecycle.py` + `test_episode_lifecycle.py` | 2 files，612 donor LOC；依赖 E1b + E4a + E8a，因为 `advance_goal_on_success()` 运行时读取 `dr_provider.DSTAR_SENTINEL` |
-| E5 | `keypoints.py` + `tests/envs/test_simtoolreal_keypoints.py` | 2 files，645 donor LOC；依赖 E1b；只覆盖 primitive geometry |
-| E6a | `rewards.py` primitive slice + matching tests | ≤305 production + ≤360 test LOC；实现 lifting/distance/keypoint/action/goal primitives |
-| E6b | append reward aggregation + matching tests | ≤115 production + ≤260 test LOC；实现 `compute_rewards`、phase gating、term dict、in-place d-star |
-| E7a | `observations.py` helper slice + staged primitive tests | ≤295 production + ≤180 test LOC；依赖 E1b + E3 + E5；实现 normalize/quaternion/noise/stack helpers |
-| E7b | append actor/critic assembly + matching tests | ≤256 production + ≤500 test LOC；实现 `build_observations` 与 `_assemble_observations` |
-| E7c | append reset observation path + pure-mock test slice | ≤64 production + 71 test LOC；同两文件≤135 added LOC；只搬 `test_observations.py::TestBuildResetObservations`，不得提前搬真实-env reset suite |
-| E8b | `dr_wrench.py` + tests | ≤3 files，≤800 LOC；依赖 A0b + B2 |
-| E8a | `dr_provider.py` + provider-only reset tests | 2 files、≤725 net LOC、1 PR；依赖 A0b + E8b + E4a + E7c；不 compose donor `conf/ppo` owners |
-| E9 | `env.py` + 两个 env-composition regression tests | 3 files、1,285 donor mechanical LOC、≤200 net handwritten adaptation LOC、1 PR；799-line env final blob + 107-line keypoint + 379-line real reset tests |
-| E10 | package registration + task integration | ≤5 files，约 660 LOC |
+批内 prerequisite DAG 仍然有效，不因 commit 合并而省略：
 
-E6/E7 的每个 child 都同时落 implementation slice 与最近风险测试；最终函数体必须与 donor 固定 blob 对应，允许的机械变化只有为分阶段追加而调整定义顺序。T1 task golden 在 E10 后覆盖最终组合，禁止把 later child 变成纯 test backfill。
+```text
+code 7:
+  A0a -> A0b
+  A0b -> E1a
+  A0b + E1a -> E1b
+  A0b -> E2
+  A0b + E1b -> E3
+  A0b -> E4a
+  A0b + E1b + E4a + E8a -> E4b
+  A0b + E1b -> E5
+  A0b -> E6a
+  A0b + E6a -> E6b
+  A0b + E1b + E3 + E5 -> E7a
+  A0b + E7a -> E7b
+  A0b + E7b -> E7c
+  A0b + code-6 B2 -> E8b
+  A0b + E8b + E4a + E7c -> E8a
+  all foundations + runnable Source capture -> T0/code-7 completion
 
-Donor 的 `test_keypoint_geometry.py` 不是 E5 primitive test：它顶层导入并执行 `SimToolRealEnv`、reward 与 episode lifecycle，必须延后到 E9 以避免 E5↔E9 循环。Donor 的 379-line `test_reset_observations.py` 同样会创建真实 MuJoCo env、import `dr_provider` 并允许依赖缺失时 skip，不能放进 E7c；E7c 只搬 `test_observations.py` 中 71-line pure-mock `TestBuildResetObservations` slice。E9 在 M0-dev、B1–B3、assets 和全部 foundations 到位后机械搬入这两个 composition tests，focused gate 必须实际 collect 且 0 skip。禁止为了让早期 child collect 而添加临时 production stub。
+code 8:
+  code 6 B1/B2/B3 + code 7 all foundations -> E9
+  E9 -> E10
+  T0 + E10 -> T1/code-8 completion
 
-E8a 只保留 `test_reset_distribution.py` 中使用 `SimToolRealCfg`/fake env 的 provider 数学测试；删除该 donor test 对 `conf/ppo/task=simtoolreal*` 的 compose helper 和三个 shipped-owner assertions。通用 PPO horizontal owner 不在本路线，donor 的 `enable_object_wrench=false` assertion 还与本计划的 SAPG Source contract 相反。SAPG owner 的 `source_random` ranges、z-reference mapping 与 `enable_object_wrench=true` 统一由 R2 Source-config golden 验收，不能在 E8a 临时创建旧 PPO YAML 来让 donor test 通过。
+code 9:
+  V2b -> R1
+  O1c + E10 -> R2
+  R1 + R2 + execution-path approval -> R3a
+  R3a -> R3b
+  R1 + R2 -> R3c
+  R3a + R3c -> R4/code-9 completion
+```
+
+### 7.4 大批次内的审查方式
+
+实现 session 只能写当前 commit 的明列路径。合并后的旧 child gate 按依赖顺序逐段执行，每段都保留测试先失败的原因、生成命令、Source/Target provenance 和通过输出；控制 session 最终对整个 batch 做一次 spec review、一次 quality review 和一次精确 commit。普通测试不得重新生成 fixture，任何 fixture 变更必须来自固定 Source checkout 并有 reviewed manifest diff。
 
 不能直接 cherry-pick donor 的 `8a4f5ccc`/`32a5cd38`/`4bc37203`：共同祖先 `8313b4cd…` 之后，target/donor 分别已有 147/51 个独立提交，backend、XML、CPU affinity 和 visualization 已分叉。Task-owned final blobs可以作为 port source；backend 必须逐 hunk 重放。
 
@@ -533,7 +530,7 @@ uv run pytest tests/vendor/test_simtoolreal_rl_games_vendor.py -q
 
 The implementation session stops here and returns the required handoff report; it must leave all V1 changes unstaged. Because an unstaged/untracked vendor is outside ordinary `git diff --check`, the control session independently reviews and reruns the gates, stages only the declared V1 paths, and requires `git diff --cached --check` to pass before committing `vendor: pin SimToolReal RL-Games runtime`. After that final commit it runs `make test-all`, reruns the audit and confirms a clean worktree before any PR. Stop if any selected Python blob is not byte-identical to Source, if the vendored package has an extra/missing `.py`, if Ruff touches vendor bytes, if the Git whitespace exception affects a non-vendor path, or if the required license/provenance cannot be stated precisely. Do not claim the selected package has the full parent-tree identity because the 122 Source YAML files are intentionally absent.
 
-## 9. Detailed plan — V2a: compatibility plus dual-hash audit
+## 9. Code commit 2, phase V2a — compatibility plus dual-hash audit
 
 **Files:**
 
@@ -554,7 +551,7 @@ The implementation session stops here and returns the required handoff report; i
 
 - [ ] **Step 1: Extend the V1 tests to require a reviewed patch allowlist**
 
-`source_manifest.json` gains an exact list of `{path, pristine_blob, pristine_sha256, patched_sha256, reason, covering_test}` records. The audit and vendor test must verify both pristine provenance and current patched bytes, reject an unlisted changed file, and reject an allowlist entry whose current file is still pristine. This deliberately replaces V1's “no compatibility patches” assertion; V2a must update the audit and its test in the same PR.
+`source_manifest.json` gains an exact list of `{path, pristine_blob, pristine_sha256, patched_sha256, reason, covering_test}` records. The audit and vendor test must verify both pristine provenance and current patched bytes, reject an unlisted changed file, and reject an allowlist entry whose current file is still pristine. This deliberately replaces V1's “no compatibility patches” assertion; V2a must update the audit and its test in the same code commit as V2b.
 
 Because root install does not include the future `sapg` extra yet, every `tests/algos/rlgames_sapg` module calls `_runtime_requirement.require_simtoolreal_rl_games()` before importing a harness. When `UNILAB_REQUIRE_SAPG` is unset, that helper skips if `rl_games` is absent or resolves to any distribution/path other than this vendor. When `UNILAB_REQUIRE_SAPG=1`, absence of the distribution, a distribution name other than `unilab-simtoolreal-rl-games`, a loaded `rl_games.__file__` outside `third_party/simtoolreal_rl_games/rl_games`, or a current-module hash inconsistent with the patched manifest must raise rather than skip. This environment switch makes the focused gate fail closed instead of relying on pytest's zero exit status for an all-skipped module.
 
@@ -573,9 +570,9 @@ Expected before compatibility patch: FAIL at the first unsupported Python/Gym/Nu
 
 - [ ] **Step 3: Apply the minimum compatibility patch set**
 
-Allowed changes are limited to distribution metadata, `gym`/Gymnasium imports and exact space-type handling, removed NumPy aliases, and explicit trusted checkpoint loading. Every changed Source file gets one entry in `PATCHES.md` and the manifest. The 14 named paths leave room for at most one additional file under the 15-file PR cap; if compatibility needs more, stop and split another child. No SAPG, GAE, timeout, normalizer, scheduler, AMP or player decision may change.
+Allowed changes are limited to distribution metadata, `gym`/Gymnasium imports and exact space-type handling, removed NumPy aliases, and explicit trusted checkpoint loading. Every changed Source file gets one entry in `PATCHES.md` and the manifest. The V2a phase has 14 named paths and room for at most one reviewed contingency path; the six V2b network paths are the separately declared remainder of code commit 2. No SAPG, GAE, timeout, normalizer, scheduler, AMP or player decision may change.
 
-该 contingency path 在编辑前必须先写入 V2a standalone issue 的 Files 列表；未更新 scope summary 时不得触碰匿名第 15 个文件。
+该 contingency path 在编辑前必须先写入当前 batch handoff 的 Files 列表；未更新 scope summary 时不得触碰匿名第 15 个 V2a 文件。
 
 - [ ] **Step 4: Run the patched-hash audit and imports on Python 3.10–3.13**
 
@@ -591,7 +588,7 @@ git diff --check
 
 Expected: native `Runner`, continuous agent, central value, model builder and player import on all four interpreters. If an interpreter cannot be provisioned, record it as unverified and do not claim 3.10–3.13 support.
 
-- [ ] **Step 5: Prepare the independent V2a handoff**
+- [ ] **Step 5: Record the V2a internal checkpoint before V2b**
 
 ```bash
 git diff --check
@@ -599,9 +596,9 @@ git status --short
 git diff --stat
 ```
 
-The implementation session leaves changes unstaged and returns its report. After independent review and verification, only the control session may stage the declared V2a paths and commit `fix: make SimToolReal RL-Games runtime compatible`. Stop if compatibility requires changing a tensor formula, RNG call, update order, checkpoint payload or player decision. That discovery returns to the maintainer instead of being hidden as a compatibility fix.
+The implementation session records the RED/GREEN output and keeps all changes unstaged, then continues directly to V2b. There is no intermediate commit. Stop if compatibility requires changing a tensor formula, RNG call, update order, checkpoint payload or player decision; that discovery returns to the maintainer instead of being hidden as a compatibility fix.
 
-## 10. Detailed plan — V2b: network/config golden
+## 10. Code commit 2, phase V2b — network/config golden
 
 **Files:**
 
@@ -707,24 +704,24 @@ git status --short
 git diff --stat
 ```
 
-The implementation session leaves changes unstaged and returns its report. After independent review and verification, only the control session may stage the declared V2b paths and commit `test: lock RL-Games SAPG network fidelity`. Stop on any unexplained network/config mismatch or if replay requires changing runtime code. Do not loosen tolerances to make the test pass.
+The implementation session leaves the combined V2a+V2b changes unstaged and returns one report with separate phase evidence. After independent review and verification, only the control session may stage the declared code-commit-2 paths and commit `fix: make RL-Games compatible and lock network fidelity`. Stop on any unexplained network/config mismatch or if replay requires changing runtime code. Do not loosen tolerances to make the test pass.
 
-## 11. 后续 child issue 的验收边界
+## 11. 后续代码提交的验收边界
 
 ### 11.1 Remaining algorithm oracles
 
-- O1a 单独创建 rollout/return/shuffle/RNG generator、harness、test、fixture 和 manifest，≤5 total files、≤800 net handwritten LOC、1 PR。Canonical synthetic case 固定为 12 env、block size 2、6 blocks、horizon/sequence length 4：48 个 base rows 加 8 个 follower rows；actor 与 central-value 两处 test-only `minibatch_size` 都必须显式设为 12，以避免 central-value dataset 初始化沿用生产值并除零，同时验证 Source 原生尾批 `[12, 12, 12, 20]`。Fixture 必须记录 action 前 timeout value、delta/GAE/return/advantage、done/tail value、follower repeat index、候选集合、relabel next value/one-step TD target、env permutation、每个重排 buffer 的 canonical SHA256，以及 NumPy/Torch/CUDA RNG 前后状态。提交的 fixture + manifest 总计不得超过 8 MiB。
-- O1b 单独创建 update generator、harness、test、fixture 和 manifest，≤5 total files、≤800 net handwritten LOC、1 PR；记录 central-before-actor 顺序、second-epoch KL reference、ratio、clipped/unclipped surrogate、value/bounds/entropy/KL/LR、pre/post-clip gradient norm、逐参数/optimizer delta、scaler state 和 overflow-skip。不得提交完整参数或完整 Adam delta；每个 tensor 保存 canonical SHA256、shape/dtype、norm/sum/max 和 64 个 name-seeded sentinel coordinates。FP32 使用 `atol=1e-6, rtol=1e-5`；AMP 只对拍 Source step/skip/scaler 行为，不与 FP32 逐元素比较；fixture + manifest 总计不得超过 8 MiB。AMP 必须在 V2b manifest 所定义的 canonical CUDA platform 上实际执行；无该平台时本 child 与最终 AMP fidelity 保持未验证，不能用 CPU/skip 作为通过。
-- O1c 单独创建 checkpoint/resume/player generator、harness、test、fixture 和 manifest，≤5 total files、≤800 net handwritten LOC、1 PR；记录 Source payload keys、model/optimizer/normalizer/scaler/RNN/rollout fields、`env_state=None`、未保存 RNG、外部恢复 RNG 后的首个 action/value/update，以及 canonical 6-env 与 N≠6 player routing。Checkpoint 在 pytest 临时目录中运行时生成；仓库只提交 schema、逐 tensor hash、数值 signature/sentinel 和 fixture manifest，总计不得超过 2 MiB。不得把 Source 未保存的状态包装成 bit-exact resume 声明。
+- Code commit 3 / O1a 单独创建 rollout/return/shuffle/RNG generator、harness、test、fixture 和 manifest，目标 5 paths、约 800 net handwritten LOC。Canonical synthetic case 固定为 12 env、block size 2、6 blocks、horizon/sequence length 4：48 个 base rows 加 8 个 follower rows；actor 与 central-value 两处 test-only `minibatch_size` 都必须显式设为 12，以避免 central-value dataset 初始化沿用生产值并除零，同时验证 Source 原生尾批 `[12, 12, 12, 20]`。Fixture 必须记录 action 前 timeout value、delta/GAE/return/advantage、done/tail value、follower repeat index、候选集合、relabel next value/one-step TD target、env permutation、每个重排 buffer 的 canonical SHA256，以及 NumPy/Torch/CUDA RNG 前后状态。提交的 fixture + manifest 总计不得超过 8 MiB。
+- Code commit 4 / O1b 单独创建 update generator、harness、test、fixture 和 manifest，目标 5 paths、约 800 net handwritten LOC；记录 central-before-actor 顺序、second-epoch KL reference、ratio、clipped/unclipped surrogate、value/bounds/entropy/KL/LR、pre/post-clip gradient norm、逐参数/optimizer delta、scaler state 和 overflow-skip。不得提交完整参数或完整 Adam delta；每个 tensor 保存 canonical SHA256、shape/dtype、norm/sum/max 和 64 个 name-seeded sentinel coordinates。FP32 使用 `atol=1e-6, rtol=1e-5`；AMP 只对拍 Source step/skip/scaler 行为，不与 FP32 逐元素比较；fixture + manifest 总计不得超过 8 MiB。AMP 必须在 V2b manifest 所定义的 canonical CUDA platform 上实际执行；无该平台时 O1b 与最终 AMP fidelity 保持未验证，不能用 CPU/skip 作为通过。
+- Code commit 5 / O1c 单独创建 checkpoint/resume/player generator、harness、test、fixture 和 manifest，目标 5 paths、约 800 net handwritten LOC；记录 Source payload keys、model/optimizer/normalizer/scaler/RNN/rollout fields、`env_state=None`、未保存 RNG、外部恢复 RNG 后的首个 action/value/update，以及 canonical 6-env 与 N≠6 player routing。Checkpoint 在 pytest 临时目录中运行时生成；仓库只提交 schema、逐 tensor hash、数值 signature/sentinel 和 fixture manifest，总计不得超过 2 MiB。不得把 Source 未保存的状态包装成 bit-exact resume 声明。
 - O1a、O1b 与 O1c 各自拥有独立 fixture manifest、生成命令和 commit；普通测试不自动 regenerate，任何 rebaseline 都需要 exact Source checkout 与 reviewed manifest diff。任一 fixture 无法在上述预算内保存充分证据时立即停止，请求 LFS/外部 artifact 授权；不得提交超过 100 MB 的 fixture，也不得为满足预算静默删掉需验收的 tensor。
-- O1a/O1b/O1c 若实际需要第 6 个文件或超过 net LOC 预算，必须先更新对应 standalone issue 的 scope；不得把额外 harness/helper 匿名塞进同一 PR。
+- O1a/O1b/O1c 若实际需要第 6 个文件或明显超过估算，必须先更新当前 batch scope；不得把额外 harness/helper 匿名塞进相邻代码提交。
 
 ### 11.2 Task mathematics oracle
 
 - T0 从固定 Source checkout 生成 backend-neutral fixture：固定 joint/object/tool state、action、delay history、goal、episode counters 与显式 random draws，记录 action target、actor 140 维 obs、critic 162 维 state、逐 reward term/raw total、termination/reset mask 和 DR 参数。manifest 必须记录 Source HEAD、task config blob、字段顺序、单位和 dtype。
 - Source fixture generator 可以读取 IsaacSim tensor，但 fixture 必须同时保存公式所需的全部 primitive inputs；不得只保存无法解释的最终输出。接触力等 simulator output 作为已命名输入固定，避免把 PhysX/MuJoCo 物理差异误判为公式差异。
 - T1 用 donor 的 SAPG `source_random` owner 和同一 primitive inputs 重放 Source reset/action/obs/reward/termination/DR；FP32 使用 `atol=1e-6, rtol=1e-5`，离散 mask/index 必须 exact。Shipped owner 的 reset manifest 只允许固定 MuJoCo table reference jitter `0.0` 对 Source `0.01`，另允许 XML `multiccd=disable`；full-SO(3)、x/y `0.1`、z noise `0.02`、arm/finger `0.1`、velocity `0.5` 与 active object-wrench DR 必须保持。除 tool-pool cardinality、backend state acquisition 与这两个 backend mappings 外，不允许 reward double scaling、obs 重排、action delay 重排、wrench disable 或 DR range 漂移。
-- 如果没有可运行的 Source oracle且现有 fixture/provenance 不足，T0/T1 保持未验证，S1 不得宣称“训练只存在后端差异”。
+- 如果没有可运行的 Source oracle 且现有 fixture/provenance 不足，code commit 7 的 T0 不能完成；T0 未通过时 code commit 8 的 T1 也不能完成。不得把这两个必需 gate 延后成 S1 的“未验证”备注，也不得宣称“训练只存在后端差异”。
 
 ### 11.3 Backend、assets 与 mature env
 
@@ -769,7 +766,7 @@ The implementation session leaves changes unstaged and returns its report. After
 
 ## 13. 总体验证命令
 
-所有 Python 命令必须使用 `uv run`。每个 child issue 先运行自己的近风险测试；最终 commit 完成后、创建或更新该 child PR 前，还必须按根 `AGENTS.md` 运行 `make test-all` 并确认工作树干净。由于 `sapg` 是 optional extra，plain suite 永久允许在未安装 extra 时 SKIP；声明 root extra 并不代表普通 `uv run pytest` 或 CI 会自动安装它，plain skip 也永远不算 parity 证据。从 V2a 起，每个 SAPG child 和最终 support gate 都必须设置 `UNILAB_REQUIRE_SAPG=1`，在 extra 落地前用 `--with-editable ./third_party/simtoolreal_rl_games`，落地后用 `--extra sapg`，并让 absence/wrong distribution/wrong path/hash drift 直接失败；required test set 不得包含 skip。下面是累计全集；support gate 只在合并序列改变或 maintainer 要求时再次运行，不能替代每个 PR 自己的 gate：
+所有 Python 命令必须使用 `uv run`。每个 code commit batch 先运行自己的近风险测试；production execution path 暴露前和最终 PR 前还必须按根 `AGENTS.md` 运行 `make test-all` 并确认工作树干净。由于 `sapg` 是 optional extra，plain suite 永久允许在未安装 extra 时 SKIP；声明 root extra 并不代表普通 `uv run pytest` 或 CI 会自动安装它，plain skip 也永远不算 parity 证据。从 V2a 起，每个 SAPG code batch 和最终 support gate 都必须设置 `UNILAB_REQUIRE_SAPG=1`，在 extra 落地前用 `--with-editable ./third_party/simtoolreal_rl_games`，落地后用 `--extra sapg`，并让 absence/wrong distribution/wrong path/hash drift 直接失败；required test set 不得包含 skip。下面是累计全集；support gate 不能替代每个代码提交自己的近风险 gate：
 
 ```bash
 uv run scripts/audit_simtoolreal_rlgames_vendor.py
@@ -798,12 +795,12 @@ uv run eval --algo sapg --task simtoolreal --sim mujoco \
 
 ## 14. Stop conditions
 
-出现任一情况立即停止当前 child issue并回到 maintainer：
+出现任一情况立即停止当前 code commit batch 并回到 maintainer：
 
 1. compatibility patch 需要改变 SAPG tensor公式、RNG、update、AMP、checkpoint 或 player 语义；
 2. adapter 需要调用 backend 私有方法、读取 XML/asset 或新增 collector thread；
 3. owner config 需要 Python 长期翻译算法字段；
-4. 单个常规 issue 超过 15 files、800 net handwritten LOC，或需要第 2 个 PR；
+4. 当前 batch 触碰 section 7 未列出的 owner/path 类别，或规模相对批准估算发生无法由机械 donor/assets/fixture 解释的实质增长；
 5. donor port 会覆盖 target CPU affinity、terrain、render、XML/MjSpec 或其他已合入能力；
 6. M0-dev 只能解析到 dirty/unversioned sibling MuJoCoUni checkout，lock 未记录完整 Git SHA，或所用 artifact 缺少文件名、SHA256 与对应 source provenance；
 7. exact resume 需要新增公共 env snapshot contract；该 contract 必须另立 ADR/issue；
@@ -813,7 +810,7 @@ uv run eval --algo sapg --task simtoolreal --sim mujoco \
 11. O1b 无法在 manifest 固定的 canonical CUDA platform 上实际执行 Source mixed-precision、GradScaler 与 overflow case；此时保持未验证并阻塞 D1 support，而不是 skip-pass；
 12. M0-dev 期间任何 shipped SAPG owner 把 `env.cpu_ids` 设为非 `null`，或代码假定 0.4 提供 affinity surface；
 13. D1 无法把 dev SHA 替换为 clean-install M0-release artifact并通过 mixed-layout/autoreset/affinity 组合回归；
-14. 实际规模超出本 umbrella 的长期维护预估，或 maintainer 无法复述当前 child 的单一结果。
+14. 实际规模超出本 umbrella 的长期维护预估，或当前 code commit 无法保持表中所述的单一结果。
 
 ## 15. Non-goals 与永久维护成本
 
@@ -836,4 +833,4 @@ uv run eval --algo sapg --task simtoolreal --sim mujoco \
 - network/rollout/update/RNG/checkpoint/player golden fixtures；
 - 每次 Python/Gym/Torch/MuJoCoUni 升级时对 compatibility 与 parity gates 的复验。
 
-当前明细恰好列出 37 个 UniLab child ID，每个 ID 对应且只对应 1 个 PR；需要第二个 PR 时必须先拆出新 child ID并重新计数。V1 的 72 Python blobs 与 A0a 的 42 meshes 是两个纯机械 file-count 例外；M0-dev/M0-release 是 MuJoCoUni 外部 gate，不计入 37。这个成本是选择“核心算法以 Source runtime 为 owner”带来的长期 fork 成本，不应在完成后被描述成一个零维护的薄插件。
+当前路线列出约 10 个代码型 commit；规划与审计文档提交不计数。旧 37-child ID 只保留为内部 gate vocabulary，V1 的 72 Python blobs、A0a 的 42 meshes、成熟 donor task 和 fixture 是明确的机械规模例外；M0-dev/M0-release 是 MuJoCoUni 外部 gate。这个成本是选择“核心算法以 Source runtime 为 owner”带来的长期 fork 成本，不应在完成后被描述成一个零维护的薄插件。
