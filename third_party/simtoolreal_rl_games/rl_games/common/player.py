@@ -4,7 +4,7 @@ import pickle
 import shutil
 import threading
 import time
-import gym
+import gymnasium as gym
 import numpy as np
 from rl_games.common.custom_utils import create_sinusoidal_encoding
 import torch

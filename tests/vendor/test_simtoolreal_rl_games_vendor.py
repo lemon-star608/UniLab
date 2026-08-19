@@ -3,9 +3,11 @@ import importlib
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+import tomllib
 
 SOURCE_HEAD = "2a9917533bfea70419ed2667a511d7238e5b3abc"
 SOURCE_PARENT_TREE = "7a6a0bb090998d00565aaefa6ab9f2b3d356ace2"
@@ -13,6 +15,17 @@ SOURCE_LICENSE_BLOB = "313ca229e6ca879466f94bff49362fb65667e22f"
 SOURCE_LICENSE_SHA256 = "46565837dec017dc2f8df9fbbb6904fb3e62dc9b91c9efd9bb8d0b22eacc47d5"
 SOURCE_SELECTION_SHA256 = "f0517fb198dbbf9dcc456ab6de4a5cf6e0c4b03cdc90e84f12e52f74a70fe0ca"
 SOURCE_PYTHON_BYTES = 439455
+EXPECTED_DISTRIBUTION = "unilab-simtoolreal-rl-games"
+EXPECTED_VERSION = "1.6.1+simtoolreal.2a991753.compat2"
+EXPECTED_PATCH_PATHS = {
+    "rl_games/algos_torch/players.py",
+    "rl_games/common/a2c_common.py",
+    "rl_games/common/env_configurations.py",
+    "rl_games/common/experience.py",
+    "rl_games/common/player.py",
+    "rl_games/common/vecenv.py",
+    "rl_games/common/wrappers.py",
+}
 VENDOR_ROOT = Path(__file__).resolve().parents[2] / "third_party/simtoolreal_rl_games"
 GIT_TEST_CONFIG = ("-c", "core.whitespace=trailing-space", "-c", "core.attributesFile=")
 
@@ -26,11 +39,12 @@ def _git(repo_root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, capture_output=True, text=True)
 
 
-def test_vendor_manifest_pins_source_and_pristine_python_hashes():
+def test_vendor_manifest_pins_pristine_objects_and_current_python_hashes():
     manifest_path = VENDOR_ROOT / "source_manifest.json"
     assert manifest_path.is_file(), f"vendor manifest does not exist: {manifest_path}"
 
     manifest = json.loads(manifest_path.read_text())
+    assert manifest["manifest_version"] == 2
     assert manifest["source_head"] == SOURCE_HEAD
     assert manifest["source_parent_tree"] == SOURCE_PARENT_TREE
     assert len(manifest["python_files"]) == 72
@@ -40,13 +54,58 @@ def test_vendor_manifest_pins_source_and_pristine_python_hashes():
     assert len(manifest_paths) == len(set(manifest_paths))
     assert sorted(manifest_paths) == sorted(actual_paths)
 
-    for entry in manifest["python_files"]:
+    patches = {entry["path"]: entry for entry in manifest["compatibility_allowlist"]}
+    assert set(patches) == EXPECTED_PATCH_PATHS
+    assert [entry["path"] for entry in manifest["compatibility_allowlist"]] == sorted(patches)
+
+    for patch in patches.values():
+        assert set(patch) == {
+            "path",
+            "pristine_blob",
+            "pristine_sha256",
+            "patched_sha256",
+            "reason",
+            "covering_test",
+        }
+        assert patch["reason"].strip()
+        assert patch["covering_test"].startswith("tests/")
+
+    canonical_records = []
+    for entry in sorted(manifest["python_files"], key=lambda item: item["path"]):
         assert set(entry) == {"path", "source_path", "source_blob", "sha256"}
         assert entry["source_path"] == f"rl_games/{entry['path']}"
+        pristine = subprocess.run(
+            ["git", "cat-file", "blob", entry["source_blob"]],
+            cwd=VENDOR_ROOT.parents[1],
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert hashlib.sha256(pristine).hexdigest() == entry["sha256"]
+        assert _git_blob_sha(pristine) == entry["source_blob"]
+        canonical_records.append(
+            [
+                entry["path"],
+                entry["source_path"],
+                entry["source_blob"],
+                entry["sha256"],
+                len(pristine),
+            ]
+        )
+
         vendored_file = VENDOR_ROOT / entry["path"]
         data = vendored_file.read_bytes()
-        assert hashlib.sha256(data).hexdigest() == entry["sha256"]
-        assert _git_blob_sha(data) == entry["source_blob"]
+        patch = patches.get(entry["path"])
+        expected_current = patch["patched_sha256"] if patch else entry["sha256"]
+        assert hashlib.sha256(data).hexdigest() == expected_current
+        if patch:
+            assert patch["pristine_blob"] == entry["source_blob"]
+            assert patch["pristine_sha256"] == entry["sha256"]
+            assert expected_current != entry["sha256"]
+        else:
+            assert _git_blob_sha(data) == entry["source_blob"]
+
+    payload = json.dumps(canonical_records, ensure_ascii=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(payload).hexdigest() == SOURCE_SELECTION_SHA256
 
 
 def test_vendor_license_is_the_exact_source_blob():
@@ -64,16 +123,91 @@ def test_vendor_license_is_the_exact_source_blob():
     assert hashlib.sha256(data).hexdigest() == SOURCE_LICENSE_SHA256
 
 
-def test_v1_has_no_compatibility_patches():
+def test_compatibility_patches_are_documented_one_for_one():
     manifest = json.loads((VENDOR_ROOT / "source_manifest.json").read_text())
-    assert manifest["compatibility_allowlist"] == []
-    assert (VENDOR_ROOT / "PATCHES.md").read_text() == (
-        "No compatibility patches are applied in V1.\n"
+    patches = manifest["compatibility_allowlist"]
+    patches_text = (VENDOR_ROOT / "PATCHES.md").read_text()
+
+    assert {entry["path"] for entry in patches} == EXPECTED_PATCH_PATHS
+    for entry in patches:
+        assert patches_text.count(f"`{entry['path']}`") == 1
+        assert entry["pristine_blob"] in patches_text
+        assert entry["pristine_sha256"] in patches_text
+        assert entry["patched_sha256"] in patches_text
+        assert entry["reason"] in patches_text
+        assert entry["covering_test"] in patches_text
+
+
+def test_nested_distribution_metadata_is_minimal_and_python_310_to_313():
+    metadata = tomllib.loads((VENDOR_ROOT / "pyproject.toml").read_text())
+    project = metadata["project"]
+
+    assert project["name"] == EXPECTED_DISTRIBUTION
+    assert project["version"] == EXPECTED_VERSION
+    assert project["requires-python"] == ">=3.10,<3.14"
+    assert project["dependencies"] == [
+        "gym==0.26.2",
+        "gymnasium>=1.0,<2",
+        "numpy>=1.24",
+        "omegaconf>=2.3",
+        "tensorboard>=2.8",
+        "tensorboardX>=2.5",
+        "torch==2.7.0",
+    ]
+    assert "optional-dependencies" not in project
+
+
+def test_editable_install_does_not_pollute_vendor_inventory(tmp_path):
+    vendor_copy = shutil.copytree(VENDOR_ROOT, tmp_path / "vendor")
+    before = {
+        path.relative_to(vendor_copy).as_posix()
+        for path in vendor_copy.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+    venv = tmp_path / "venv"
+    create = subprocess.run(
+        ["uv", "venv", "--python", sys.executable, str(venv)],
+        check=False,
+        capture_output=True,
+        text=True,
     )
+    assert create.returncode == 0, create.stderr or create.stdout
+    interpreter = venv / "bin/python"
+    command = [
+        "uv",
+        "pip",
+        "install",
+        "--python",
+        str(interpreter),
+        "--no-deps",
+        "--editable",
+        str(vendor_copy),
+    ]
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout
+    installed = subprocess.run(
+        ["uv", "pip", "show", "--python", str(interpreter), EXPECTED_DISTRIBUTION],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert installed.returncode == 0, installed.stderr or installed.stdout
+    assert f"Name: {EXPECTED_DISTRIBUTION}" in installed.stdout
+    assert f"Version: {EXPECTED_VERSION}" in installed.stdout
+    assert f"Editable project location: {vendor_copy}" in installed.stdout
+    after = {
+        path.relative_to(vendor_copy).as_posix()
+        for path in vendor_copy.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+    assert after == before
 
 
 def test_readme_distinguishes_excluded_source_tests_from_runtime_test_modules():
     readme = (VENDOR_ROOT / "README.md").read_text()
+    assert "72 pristine Source identities" in readme
+    assert "7 reviewed compatibility patches" in readme
+    assert "65 Python files remain byte-identical" in readme
     assert "Source top-level `rl_games/tests/` test suite" in readme
     assert "`common/test_utils.py`" in readme
     assert "`envs/test/**`" in readme
@@ -146,7 +280,7 @@ def _rewrite_manifest(vendor_root: Path, mutate) -> None:
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
 
-def test_audit_accepts_the_pristine_snapshot():
+def test_audit_accepts_the_dual_hash_snapshot():
     report = _audit_module().audit_vendor(VENDOR_ROOT)
     assert (report.python_file_count, report.python_byte_count) == (72, SOURCE_PYTHON_BYTES)
     assert report.source_selection_sha256 == SOURCE_SELECTION_SHA256
@@ -242,6 +376,45 @@ def test_audit_rejects_python_hash_drift(tmp_path):
         audit.audit_vendor(vendor_root)
 
 
+def test_audit_rejects_an_unlisted_compatibility_patch(tmp_path):
+    vendor_root = _copy_vendor(tmp_path)
+    unlisted = vendor_root / "rl_games/torch_runner.py"
+    unlisted.write_bytes(unlisted.read_bytes() + b"\n")
+
+    audit = _audit_module()
+    with pytest.raises(audit.AuditError, match="unlisted compatibility patch"):
+        audit.audit_vendor(vendor_root)
+
+
+def test_audit_rejects_a_redundant_compatibility_allowlist_entry(tmp_path):
+    vendor_root = _copy_vendor(tmp_path)
+    manifest = json.loads((vendor_root / "source_manifest.json").read_text())
+    patch = manifest["compatibility_allowlist"][0]
+    pristine = subprocess.run(
+        ["git", "cat-file", "blob", patch["pristine_blob"]],
+        cwd=VENDOR_ROOT.parents[1],
+        check=True,
+        capture_output=True,
+    ).stdout
+    (vendor_root / patch["path"]).write_bytes(pristine)
+
+    audit = _audit_module()
+    with pytest.raises(audit.AuditError, match="redundant compatibility allowlist"):
+        audit.audit_vendor(vendor_root)
+
+
+def test_audit_rejects_a_patched_hash_mismatch(tmp_path):
+    vendor_root = _copy_vendor(tmp_path)
+    manifest = json.loads((vendor_root / "source_manifest.json").read_text())
+    patch = manifest["compatibility_allowlist"][0]
+    patched = vendor_root / patch["path"]
+    patched.write_bytes(patched.read_bytes() + b"\n")
+
+    audit = _audit_module()
+    with pytest.raises(audit.AuditError, match="patched SHA256 drift"):
+        audit.audit_vendor(vendor_root)
+
+
 def test_audit_rejects_coordinated_python_and_manifest_hash_drift(tmp_path):
     vendor_root = _copy_vendor(tmp_path)
     drifted = vendor_root / "rl_games/torch_runner.py"
@@ -280,15 +453,37 @@ def test_audit_rejects_a_missing_license(tmp_path):
         audit.audit_vendor(vendor_root)
 
 
-def test_audit_rejects_a_nonempty_compatibility_allowlist(tmp_path):
+def test_audit_rejects_an_allowlist_entry_for_an_unchanged_file(tmp_path):
     vendor_root = _copy_vendor(tmp_path)
-    _rewrite_manifest(
-        vendor_root,
-        lambda manifest: manifest["compatibility_allowlist"].append(
-            {"path": "rl_games/torch_runner.py"}
-        ),
+    manifest = json.loads((vendor_root / "source_manifest.json").read_text())
+    source_entry = next(
+        entry for entry in manifest["python_files"] if entry["path"] == "rl_games/torch_runner.py"
     )
 
+    def add_redundant_entry(current_manifest):
+        current_manifest["compatibility_allowlist"].append(
+            {
+                "path": source_entry["path"],
+                "pristine_blob": source_entry["source_blob"],
+                "pristine_sha256": source_entry["sha256"],
+                "patched_sha256": source_entry["sha256"],
+                "reason": "not a real patch",
+                "covering_test": "tests/vendor/test_simtoolreal_rl_games_vendor.py",
+            }
+        )
+
+    _rewrite_manifest(vendor_root, add_redundant_entry)
+
     audit = _audit_module()
-    with pytest.raises(audit.AuditError, match="compatibility_allowlist must be empty"):
+    with pytest.raises(audit.AuditError, match="redundant compatibility allowlist"):
+        audit.audit_vendor(vendor_root)
+
+
+def test_audit_rejects_patch_documentation_drift(tmp_path):
+    vendor_root = _copy_vendor(tmp_path)
+    patches = vendor_root / "PATCHES.md"
+    patches.write_text(patches.read_text().replace("Gymnasium", "unreviewed rewrite", 1))
+
+    audit = _audit_module()
+    with pytest.raises(audit.AuditError, match="PATCHES.md"):
         audit.audit_vendor(vendor_root)

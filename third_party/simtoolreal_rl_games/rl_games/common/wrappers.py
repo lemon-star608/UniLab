@@ -5,8 +5,8 @@ import os
 os.environ.setdefault('PATH', '')
 from collections import deque
 
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 from copy import copy
 
 
@@ -683,4 +683,3 @@ def make_car_racing(env_id, skip=4):
 def make_atari_deepmind(env_id, noop_max=30, skip=4, sticky=False, episode_life=True, wrap_impala=False, **kwargs):
     env = make_atari(env_id, noop_max=noop_max, skip=skip, sticky=sticky, **kwargs)
     return wrap_deepmind(env, episode_life=episode_life, clip_rewards=False, wrap_impala=wrap_impala)
-

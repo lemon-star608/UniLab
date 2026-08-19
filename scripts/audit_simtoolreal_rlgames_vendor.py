@@ -1,4 +1,4 @@
-"""Fail-closed integrity audit for the pristine SimToolReal RL-Games V1 vendor."""
+"""Fail-closed integrity audit for the SimToolReal RL-Games V2 vendor."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ SOURCE_SELECTION_SHA256 = "f0517fb198dbbf9dcc456ab6de4a5cf6e0c4b03cdc90e84f12e52
 PYTHON_FILE_COUNT = 72
 SOURCE_PYTHON_BYTES = 439455
 EXCLUDED_YAML_FILE_COUNT = 122
-NO_PATCHES_STATEMENT = "No compatibility patches are applied in V1.\n"
 APPROVED_METADATA_FILES = frozenset(
     {
         "LICENSE",
@@ -35,9 +34,10 @@ APPROVED_METADATA_FILES = frozenset(
     }
 )
 FIXED_METADATA_SHA256 = {
-    "README.md": "c9aa687b92bad1bfc60242b2945d58d02f9c56794c365d66b46a86fb773eb572",
+    "PATCHES.md": "dceba5f94e9232e1033a3209e89101b2e18612f2cdd036053584c01fcf67be4a",
+    "README.md": "42f3a0413dadb7a34036054a547221769b34fd7ce8807591aac17c25175b5bb4",
     "UPSTREAM.md": "0daf6457fe21198047cf75d3b104d92fe1d4603eda1bd1dd54086f2f404c72bd",
-    "pyproject.toml": "77c7c45479b809d791721cb8ff0377dca5255526e45dd2a47eee02daee715f17",
+    "pyproject.toml": "f26bab9e4118b864d7af26a3318cba80ee5a2ca08c3b0eda27926f9a40f0d7e5",
 }
 VENDOR_RUFF_EXCLUSION = "third_party/simtoolreal_rl_games"
 GIT_ATTRIBUTES_CONTENT = b"third_party/simtoolreal_rl_games/rl_games/**/*.py -whitespace\n"
@@ -60,10 +60,18 @@ MANIFEST_KEYS = {
     "python_files",
 }
 PYTHON_ENTRY_KEYS = {"path", "source_path", "source_blob", "sha256"}
+PATCH_ENTRY_KEYS = {
+    "path",
+    "pristine_blob",
+    "pristine_sha256",
+    "patched_sha256",
+    "reason",
+    "covering_test",
+}
 
 
 class AuditError(RuntimeError):
-    """Raised when the V1 vendor does not match its fixed Source provenance."""
+    """Raised when the V2 vendor does not match fixed Source and patch provenance."""
 
 
 @dataclass(frozen=True)
@@ -110,7 +118,7 @@ def _check_source_identity(manifest: dict[str, Any]) -> None:
         "source_parent_path": SOURCE_PARENT_PATH,
         "source_parent_tree": SOURCE_PARENT_TREE,
     }
-    if manifest["manifest_version"] != 1:
+    if manifest["manifest_version"] != 2:
         raise AuditError(f"manifest_version identity mismatch: {manifest['manifest_version']!r}")
     for field, expected in identities.items():
         actual = manifest[field]
@@ -129,10 +137,93 @@ def _check_source_identity(manifest: dict[str, Any]) -> None:
         )
 
 
-def _check_no_compatibility_patches(vendor_root: Path, manifest: dict[str, Any]) -> None:
+def _git_blob(blob_oid: str) -> bytes:
+    result = subprocess.run(
+        ["git", "cat-file", "blob", blob_oid],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise AuditError(
+            f"Source selection anchor mismatch: pristine Git object {blob_oid} is unavailable"
+        )
+    return result.stdout
+
+
+def _render_patches(patches: list[dict[str, Any]]) -> str:
+    lines = [
+        "# Compatibility patches",
+        "",
+        (
+            "The pristine Git object and SHA256 remain the provenance anchor for each entry. "
+            "The patched SHA256 is the only accepted runtime byte sequence."
+        ),
+    ]
+    for patch in patches:
+        lines.extend(
+            [
+                "",
+                f"## `{patch['path']}`",
+                "",
+                f"- Pristine Git blob: `{patch['pristine_blob']}`",
+                f"- Pristine SHA256: `{patch['pristine_sha256']}`",
+                f"- Patched SHA256: `{patch['patched_sha256']}`",
+                f"- Reason: {patch['reason']}",
+                f"- Covering test: `{patch['covering_test']}`",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _check_compatibility_patches(
+    vendor_root: Path,
+    manifest: dict[str, Any],
+    entries_by_path: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
     allowlist = manifest["compatibility_allowlist"]
-    if not isinstance(allowlist, list) or allowlist:
-        raise AuditError("compatibility_allowlist must be empty in V1")
+    if not isinstance(allowlist, list):
+        raise AuditError("compatibility_allowlist must be a list")
+
+    patches: dict[str, dict[str, Any]] = {}
+    for index, patch in enumerate(allowlist):
+        if not isinstance(patch, dict) or set(patch) != PATCH_ENTRY_KEYS:
+            raise AuditError(f"compatibility_allowlist[{index}] schema mismatch")
+        relative_path = _safe_python_path(patch["path"]).as_posix()
+        if relative_path in patches:
+            raise AuditError(f"duplicate compatibility allowlist path: {relative_path}")
+        if relative_path not in entries_by_path:
+            raise AuditError(f"compatibility patch is outside Source selection: {relative_path}")
+        source_entry = entries_by_path[relative_path]
+        if patch["pristine_blob"] != source_entry["source_blob"]:
+            raise AuditError(f"compatibility pristine blob drift for {relative_path}")
+        if patch["pristine_sha256"] != source_entry["sha256"]:
+            raise AuditError(f"compatibility pristine SHA256 drift for {relative_path}")
+        if not isinstance(patch["patched_sha256"], str) or not HEX64.fullmatch(
+            patch["patched_sha256"]
+        ):
+            raise AuditError(f"invalid patched SHA256 for {relative_path}")
+        if patch["patched_sha256"] == patch["pristine_sha256"]:
+            raise AuditError(f"redundant compatibility allowlist entry: {relative_path}")
+        if not isinstance(patch["reason"], str) or not patch["reason"].strip():
+            raise AuditError(f"empty compatibility reason for {relative_path}")
+        covering_test = patch["covering_test"]
+        if (
+            not isinstance(covering_test, str)
+            or not covering_test.startswith("tests/")
+            or "::" not in covering_test
+            or ".." in PurePosixPath(covering_test.split("::", 1)[0]).parts
+        ):
+            raise AuditError(f"invalid compatibility covering test for {relative_path}")
+        patches[relative_path] = patch
+
+    expected_order = sorted(patches)
+    actual_order = [patch["path"] for patch in allowlist]
+    if actual_order != expected_order:
+        raise AuditError(
+            f"compatibility_allowlist must be path-sorted: expected {expected_order}, "
+            f"got {actual_order}"
+        )
 
     patches_path = vendor_root / "PATCHES.md"
     _require_regular_file(patches_path, "PATCHES.md")
@@ -140,8 +231,10 @@ def _check_no_compatibility_patches(vendor_root: Path, manifest: dict[str, Any])
         patches_text = patches_path.read_text()
     except (OSError, UnicodeDecodeError) as exc:
         raise AuditError(f"PATCHES.md cannot be decoded: {exc}") from exc
-    if patches_text != NO_PATCHES_STATEMENT:
-        raise AuditError("PATCHES.md does not contain the exact V1 no-patch statement")
+    expected_text = _render_patches(allowlist)
+    if patches_text != expected_text:
+        raise AuditError("PATCHES.md does not exactly document compatibility_allowlist")
+    return patches
 
 
 def _safe_python_path(value: Any) -> PurePosixPath:
@@ -199,18 +292,21 @@ def _check_python_files(vendor_root: Path, manifest: dict[str, Any]) -> tuple[in
     for relative_path in sorted(expected_paths):
         path = actual_by_path[relative_path]
         _require_regular_file(path, f"vendored Python file {relative_path}")
-        data = path.read_bytes()
         entry = entries_by_path[relative_path]
-        actual_sha256 = hashlib.sha256(data).hexdigest()
-        if actual_sha256 != entry["sha256"]:
+        pristine = _git_blob(entry["source_blob"])
+        pristine_sha256 = hashlib.sha256(pristine).hexdigest()
+        if pristine_sha256 != entry["sha256"]:
             raise AuditError(
-                f"SHA256 drift for {relative_path}: expected {entry['sha256']}, got {actual_sha256}"
+                "Source selection anchor mismatch: "
+                f"pristine SHA256 for {relative_path} is {pristine_sha256}, "
+                f"manifest records {entry['sha256']}"
             )
-        actual_blob = _git_blob_sha(data)
-        if actual_blob != entry["source_blob"]:
+        pristine_blob = _git_blob_sha(pristine)
+        if pristine_blob != entry["source_blob"]:
             raise AuditError(
-                f"Source Git blob drift for {relative_path}: expected {entry['source_blob']}, "
-                f"got {actual_blob}"
+                "Source selection anchor mismatch: "
+                f"pristine Git blob for {relative_path} is {pristine_blob}, "
+                f"manifest records {entry['source_blob']}"
             )
         canonical_records.append(
             [
@@ -218,7 +314,7 @@ def _check_python_files(vendor_root: Path, manifest: dict[str, Any]) -> tuple[in
                 entry["source_path"],
                 entry["source_blob"],
                 entry["sha256"],
-                len(data),
+                len(pristine),
             ]
         )
 
@@ -235,6 +331,34 @@ def _check_python_files(vendor_root: Path, manifest: dict[str, Any]) -> tuple[in
             f"Source Python byte count mismatch: expected {SOURCE_PYTHON_BYTES}, "
             f"got {python_byte_count}"
         )
+
+    patches = _check_compatibility_patches(vendor_root, manifest, entries_by_path)
+    for relative_path in sorted(expected_paths):
+        path = actual_by_path[relative_path]
+        entry = entries_by_path[relative_path]
+        actual_data = path.read_bytes()
+        actual_sha256 = hashlib.sha256(actual_data).hexdigest()
+        patch = patches.get(relative_path)
+        if actual_sha256 == entry["sha256"]:
+            if patch is not None:
+                raise AuditError(f"redundant compatibility allowlist entry: {relative_path}")
+            actual_blob = _git_blob_sha(actual_data)
+            if actual_blob != entry["source_blob"]:
+                raise AuditError(
+                    f"Source Git blob drift for {relative_path}: "
+                    f"expected {entry['source_blob']}, got {actual_blob}"
+                )
+            continue
+        if patch is None:
+            raise AuditError(
+                f"unlisted compatibility patch SHA256 drift for {relative_path}: "
+                f"expected pristine {entry['sha256']}, got {actual_sha256}"
+            )
+        if actual_sha256 != patch["patched_sha256"]:
+            raise AuditError(
+                f"patched SHA256 drift for {relative_path}: "
+                f"expected {patch['patched_sha256']}, got {actual_sha256}"
+            )
     return python_byte_count, selection_sha256
 
 
@@ -311,7 +435,7 @@ def _check_source_packaging(manifest: dict[str, Any]) -> None:
 
 
 def audit_vendor(vendor_root: Path = DEFAULT_VENDOR_ROOT) -> AuditReport:
-    """Audit the selected V1 vendor without consulting a Source working tree."""
+    """Audit pristine Source provenance and reviewed V2 compatibility bytes."""
     vendor_root = vendor_root.absolute()
     if vendor_root.is_symlink():
         raise AuditError(f"vendor root symlink is forbidden: {vendor_root}")
@@ -320,7 +444,6 @@ def audit_vendor(vendor_root: Path = DEFAULT_VENDOR_ROOT) -> AuditReport:
 
     manifest = _load_manifest(vendor_root)
     _check_source_identity(manifest)
-    _check_no_compatibility_patches(vendor_root, manifest)
     python_byte_count, selection_sha256 = _check_python_files(vendor_root, manifest)
     _check_vendor_inventory(vendor_root, manifest)
     _check_fixed_metadata(vendor_root)
@@ -445,7 +568,7 @@ def main() -> int:
     print(f"{report.python_file_count} selected Python blobs verified")
     print(f"Source Python bytes: {report.python_byte_count}")
     print(f"Source selection anchor: {report.source_selection_sha256}")
-    print("Compatibility allowlist: empty (V1)")
+    print("Compatibility allowlist: 7 reviewed patches verified (V2)")
     print("Root Ruff formatter isolation: verified")
     print("Root Git whitespace isolation: verified")
     return 0
