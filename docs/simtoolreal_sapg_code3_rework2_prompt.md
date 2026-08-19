@@ -115,7 +115,7 @@ This rework exists because some regressions can still pass the current tests, an
 **Files:**
 
 - Modify: `scripts/generate_simtoolreal_sapg_rollout_fixture.py:77-110,174`
-- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py:97-147`
+- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py`
 
 ### Required RED
 
@@ -174,8 +174,8 @@ Do not assert only that an earlier root precheck ran. This test specifically own
 
 **Files:**
 
-- Modify: `tests/algos/rlgames_sapg/source_rollout_harness.py:100-106,631-660`
-- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py:81-90`
+- Modify: `tests/algos/rlgames_sapg/source_rollout_harness.py`
+- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py`
 
 Current replay interleaves:
 
@@ -216,8 +216,8 @@ The inventory error should include sorted missing and extra names. Shape, dtype 
 
 **Files:**
 
-- Modify: `tests/algos/rlgames_sapg/source_rollout_harness.py:338-394,563-570`
-- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py:150-160`
+- Modify: `tests/algos/rlgames_sapg/source_rollout_harness.py`
+- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py`
 
 The current wrapper implementation is correct, but `rnn_delegate_original_calls = len(masked_records)` only counts wrapper records. Reintroducing an extra discarded `original_forward(...)` call would keep the value at four, preserve deterministic outputs and consume no RNG, so the old defect would evade every current test.
 
@@ -251,8 +251,8 @@ Do not add dropout, alter train inputs or change RNN mathematics.
 
 **Files:**
 
-- Modify: `tests/algos/rlgames_sapg/source_rollout_harness.py:511-529`
-- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py:54-78`
+- Modify: `tests/algos/rlgames_sapg/source_rollout_harness.py`
+- Test: `tests/algos/rlgames_sapg/test_rollout_golden.py`
 
 The current predicate only checks that each follower state carrier differs from its original carrier. An arbitrary constant or NaN can therefore be reported as “relabelled.”
 

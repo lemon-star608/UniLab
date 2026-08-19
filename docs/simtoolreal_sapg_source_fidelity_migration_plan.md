@@ -230,10 +230,10 @@ src/unilab/algos/torch/rlgames_sapg/
 ├── runtime.py
 └── player.py
 
-scripts/train_rlgames_sapg.py
+`<future SAPG training entrypoint>`
 ```
 
-`scripts/train_rlgames_sapg.py` 只 compose、建 env/adapter/tracker、注入 runtime handles 并调用原生 `Runner`。
+未来的 SAPG training entrypoint 只 compose、建 env/adapter/tracker、注入 runtime handles 并调用原生 `Runner`；该 entrypoint 当前尚未落地。
 
 公共入口与安装面只做路由/依赖声明，不承载算法翻译：
 
@@ -774,10 +774,10 @@ UNILAB_REQUIRE_SAPG=1 uv run --extra sapg pytest tests/algos/rlgames_sapg -q
 uv run pytest tests/envs/manipulation/simtoolreal tests/simtoolreal -q
 uv run pytest tests/base/backend/test_mujoco_model_source_variants.py \
               tests/base/backend/test_mujoco_autoreset_real_pool.py -q
-uv run ruff check src/unilab/algos/torch/rlgames_sapg scripts/train_rlgames_sapg.py \
+uv run ruff check src/unilab/algos/torch/rlgames_sapg \
                   tests/algos/rlgames_sapg
 uv run ruff format --check src/unilab/algos/torch/rlgames_sapg \
-                         scripts/train_rlgames_sapg.py tests/algos/rlgames_sapg
+                         tests/algos/rlgames_sapg
 git diff --check
 make test-all
 ```
@@ -785,8 +785,7 @@ make test-all
 真实 smoke 的最终命令形态：
 
 ```bash
-uv run train --algo sapg --task simtoolreal --sim mujoco \
-  rl_games.params.config.max_epochs=1
+proposed: uv run train --algo sapg --task simtoolreal --sim mujoco rl_games.params.config.max_epochs=1
 uv run eval --algo sapg --task simtoolreal --sim mujoco \
   --load-run -1
 ```

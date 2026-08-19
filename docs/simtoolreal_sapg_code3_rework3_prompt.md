@@ -130,7 +130,7 @@ actual_arrays["a"] - expected_arrays["a"]
 
 调用真实 `_target_array_diagnostics`，断言错误消息精确包含排序后的：
 
-```text
+```output
 missing=['b'], extra=['c']
 ```
 
