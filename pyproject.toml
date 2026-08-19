@@ -115,7 +115,7 @@ required-environments = [
 line-length = 100
 target-version = "py310"
 src = ["src"]
-extend-exclude = [".history"]
+extend-exclude = [".history", "third_party/simtoolreal_rl_games"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
