@@ -57,6 +57,7 @@ Source RL-Games 固定信息：
 4. Clean target 的 `mujoco-uni-runtime==0.3.1` 在真实 12-distribution model oracle 上失败：`ValueError: models are not compatible: model[0] and model[7]`。本地 0.4 mixed-layout build 对同一 oracle 通过。
 5. Donor 600-tool catalog 有 1/2/3 tool-geom 三类 topology；mixed-layout 不是可跳过的边角能力。
 6. Root Ruff 未排除新 vendor；对 Source runtime 执行 format check 时 72 个 Python 中 63 个会被改写。V1 必须同时落精确 vendor exclusion，否则 `make test-all` 会破坏 pristine hashes。
+7. 固定 Source Python blobs 中有 45 个文件包含上游原始 whitespace diagnostics；全部 stage 后，普通 `git diff --cached --check` 会失败。V1 必须用 path-scoped Git attribute 关闭且只关闭这些 pristine Python blobs 的 whitespace diagnostics，同时保留普通项目文件的检查。
 
 ### 1.3 为什么值得做
 
@@ -343,7 +344,7 @@ M0-release 不阻塞算法 oracle、env 接线或 S1 smoke，只阻塞 D1 的最
 
 | 顺序 | 单一结果 | 规模 | 依赖 |
 |---|---|---:|---|
-| V1 | 固定 Source RL-Games pristine snapshot、provenance 与 formatter isolation | 72 个机械复制 Python + 6 metadata + root `pyproject.toml` + 2 audit/test；≤800 net 手写 LOC，1 PR | 无 |
+| V1 | 固定 Source RL-Games pristine snapshot、provenance 与 formatter/Git-whitespace isolation | 72 个机械复制 Python + 6 metadata + root `pyproject.toml`、`.gitattributes` + 2 audit/test；≤850 net 手写 LOC，1 PR | 无 |
 | V2a | Python 3.10–3.13/Gymnasium compatibility + pristine/patched hash audit | ≤15 total files、≤700 net 手写 LOC、1 PR；14 named paths，最多 1 个 contingency path | V1 |
 | V2b | 锁定 network/config golden | 6 files、≤800 net 手写 LOC、1 PR；fixture bytes 单列且≤8 MiB | V2a |
 
@@ -458,6 +459,7 @@ E8a 只保留 `test_reset_distribution.py` 中使用 `SimToolRealCfg`/fake env �
 - Create: `third_party/simtoolreal_rl_games/source_manifest.json`
 - Create mechanically: `third_party/simtoolreal_rl_games/rl_games/**/*.py`
 - Modify: `pyproject.toml` (`tool.ruff.extend-exclude` only)
+- Create: `.gitattributes` (pristine vendor Python `-whitespace` only)
 - Create: `scripts/audit_simtoolreal_rlgames_vendor.py`
 - Test: `tests/vendor/test_simtoolreal_rl_games_vendor.py`
 
@@ -504,11 +506,11 @@ Expected: FAIL while resolving `third_party/simtoolreal_rl_games/source_manifest
 
 - [ ] **Step 3: Add the exact 72-file snapshot, nested MIT license and provenance**
 
-`source_manifest.json` must contain relative path, Git blob SHA and SHA256 for every selected Python file. `UPSTREAM.md` records Source HEAD、parent tree（包含未迁移的 122 YAML）和 RL-Games/SAPG lineage。`PATCHES.md` contains exactly the V1 no-patch statement. Root `pyproject.toml` 的唯一变化是把 `third_party/simtoolreal_rl_games` 加入 Ruff `extend-exclude`；本 issue 不 import package、不增加 root dependency。
+`source_manifest.json` must contain relative path, Git blob SHA and SHA256 for every selected Python file. `UPSTREAM.md` records Source HEAD、parent tree（包含未迁移的 122 YAML）和 RL-Games/SAPG lineage。`PATCHES.md` contains exactly the V1 no-patch statement. Root `pyproject.toml` 的唯一变化是把 `third_party/simtoolreal_rl_games` 加入 Ruff `extend-exclude`。Root `.gitattributes` 只包含 `third_party/simtoolreal_rl_games/rl_games/**/*.py -whitespace`，使 Git 保留 Source 原始字节但不把该固定路径的上游尾随空白当作提交错误；不得关闭 diff 或 binary 展示，也不得影响其他项目文件。本 issue 不 import package、不增加 root dependency。
 
 - [ ] **Step 4: Add a fail-closed audit command**
 
-The audit must reject missing/extra `.py` files, hash drift, a changed Source identity, missing license, or non-empty compatibility allowlist.
+The audit must reject missing/extra `.py` files, hash drift, a changed Source identity, missing license, non-empty compatibility allowlist, or an inexact/ineffective Git whitespace exception. Near-risk tests must prove a representative vendor Python path resolves to `whitespace: unset`, an ordinary project Python path remains `whitespace: unspecified`, and an isolated Git diff accepts trailing whitespace only under the fixed vendor path.
 
 Run:
 
@@ -529,7 +531,7 @@ uv run scripts/audit_simtoolreal_rlgames_vendor.py
 uv run pytest tests/vendor/test_simtoolreal_rl_games_vendor.py -q
 ```
 
-The implementation session stops here and returns the required handoff report; it must leave all V1 changes unstaged. The control session independently reviews and reruns the gates, then stages only the declared V1 paths and commits `vendor: pin SimToolReal RL-Games runtime`. After that final commit it runs `make test-all`, reruns the audit and confirms a clean worktree before any PR. Stop if any selected Python blob is not byte-identical to Source, if the vendored package has an extra/missing `.py`, if Ruff touches vendor bytes, or if the required license/provenance cannot be stated precisely. Do not claim the selected package has the full parent-tree identity because the 122 Source YAML files are intentionally absent.
+The implementation session stops here and returns the required handoff report; it must leave all V1 changes unstaged. Because an unstaged/untracked vendor is outside ordinary `git diff --check`, the control session independently reviews and reruns the gates, stages only the declared V1 paths, and requires `git diff --cached --check` to pass before committing `vendor: pin SimToolReal RL-Games runtime`. After that final commit it runs `make test-all`, reruns the audit and confirms a clean worktree before any PR. Stop if any selected Python blob is not byte-identical to Source, if the vendored package has an extra/missing `.py`, if Ruff touches vendor bytes, if the Git whitespace exception affects a non-vendor path, or if the required license/provenance cannot be stated precisely. Do not claim the selected package has the full parent-tree identity because the 122 Source YAML files are intentionally absent.
 
 ## 9. Detailed plan — V2a: compatibility plus dual-hash audit
 
