@@ -19,25 +19,30 @@
 feat/simtoolreal-sapg-rlgames
 ~~~
 
-clean restart 基准：
+固定 Git 身份和本轮 correction authoring 起点：
 
 ~~~text
-HEAD:    ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
-staged:  empty
+lineage base:          ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
+correction base/HEAD:  910a4309918b1dd2fadc60c43f4250d03d84153a
+worktree:              clean
+staged:                empty
 Code #4 implementation files: absent
 ~~~
 
-在本次两文档写作开始前，工作树干净。控制 session 接收 docs writer 交接时，只允许看到：
+correction base 是 lineage base 的 exact one-commit child；其 diff 恰为新增 clean execution
+prompt 和修改本 handoff。本轮 authoritative semantic correction 从上述 clean 状态开始，
+correction writer 只允许把这两个既有 docs paths 留为 unstaged modifications：
 
 ~~~text
-?? docs/simtoolreal_sapg_code4_clean_execution_prompt.md
+ M docs/simtoolreal_sapg_code4_clean_execution_prompt.md
  M docs/simtoolreal_sapg_rlgames_control_handoff.md
 ~~~
 
-这是当前未暂存事实：新 prompt 是 untracked，handoff 是 unstaged tracked modification。
-控制 session 精确 stage 两个 paths 后，status 才应分别变为 A 和 M；提交后实际 HEAD
-应是 ba16f5b4 的 docs-only 后继，且工作树重新干净。任何第三个 changed/staged path 都
-不是本交接授权范围，必须先调查，不能用 stash、reset、clean、checkout 或删除来掩盖。
+控制 session 接收 correction 交接后先通过 section 1.1 pre-commit review gate，再独立审查、
+精确 stage 这两个 M paths，并创建一笔 correction commit。Code #4 dispatch/resume HEAD
+必须通过 section 1.2 post-commit dispatch gate，成为 correction base 的 exact
+single-parent one-commit child，且工作树重新干净。任何第三个 changed/staged path 都不是
+本交接授权范围，必须先调查，不能用 stash、reset、clean、checkout 或删除来掩盖。
 
 Code #4 已完全 reset，仓库中没有以下实现文件：
 
@@ -65,40 +70,145 @@ ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
 该目录只证明 reset 可恢复，不是实现输入、fixture seed、artifact anchor 或 Source evidence。
 不要检查其实现内容，不要复制、恢复、hash-rebaseline 或向新 agent 下发其中任何文件。
 
-控制 session 是唯一 Git history、staging、commit 与 branch owner。当前没有外部 writer，
-也没有任何实现 agent 正在写共享工作树。控制 session 只会在 clean prompt 提交后直接
-派出一个新的内部实现 agent；该 agent 活跃期间，它是五个 Code #4 路径的唯一 writer，
-控制 session 不同时编辑。
+控制 session 是唯一 Git history、staging、commit 与 branch owner。correction writer 只
+交回上述两份未暂存 docs；控制 session 完成本轮 exact correction commit 和 section 1.2
+post-commit dispatch gate 后，才直接派出一个新的内部实现 agent。该 agent 活跃期间，它是
+五个 Code #4 路径的唯一 writer，控制 session 不同时编辑。
 
 Code #5 未批准，不能写其 prompt、派 agent 或开始实现。
 
-接管时先只读运行：
+### 1.1 correction commit 前 review gate
+
+控制 session 接收 writer 交接时先运行本 gate；这是合法的两份 unstaged M 状态，不能要求
+`910a4309..HEAD` count=1，也不能要求 worktree clean：
 
 ~~~bash
+(
+set -e
+set -o pipefail
 git rev-parse --abbrev-ref HEAD
 git rev-parse HEAD
+git rev-parse 910a4309918b1dd2fadc60c43f4250d03d84153a^
+git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a
+git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a
+git diff --name-status
+git diff --name-only
+git diff --cached --name-only
+git status --short --branch
+git status --porcelain=v1 --untracked-files=all
+for code4_file in \
+  scripts/generate_simtoolreal_sapg_update_fixture.py \
+  tests/algos/rlgames_sapg/source_update_harness.py \
+  tests/algos/rlgames_sapg/test_update_golden.py \
+  tests/fixtures/simtoolreal_sapg/source_update_fp32.npz \
+  tests/fixtures/simtoolreal_sapg/source_update_manifest.json
+do
+  test ! -e "$code4_file" || exit 1
+done
+test "$(git rev-parse --abbrev-ref HEAD)" = \
+  feat/simtoolreal-sapg-rlgames
+test "$(git rev-parse HEAD)" = \
+  910a4309918b1dd2fadc60c43f4250d03d84153a
+test "$(git rev-parse 910a4309918b1dd2fadc60c43f4250d03d84153a^)" = \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
+test "$(git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a)" \
+  -eq 1
+test "$(git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a)" = \
+  "$(printf 'A\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+test "$(git diff --name-status)" = \
+  "$(printf 'M\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+test "$(git diff --name-only)" = \
+  "$(printf 'docs/simtoolreal_sapg_code4_clean_execution_prompt.md\ndocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+code4_staged_paths=$(git diff --cached --name-only)
+test -z "$code4_staged_paths"
+test "$(git status --porcelain=v1 --untracked-files=all)" = \
+  "$(printf ' M docs/simtoolreal_sapg_code4_clean_execution_prompt.md\n M docs/simtoolreal_sapg_rlgames_control_handoff.md')"
+)
+~~~
+
+以上 gate 必须同时证明 HEAD exactly 是 correction base、分支正确、base lineage/count/diff
+正确、worktree diff exactly 是两份 unstaged M、unstaged name inventory exactly 是两份 docs、
+porcelain v1（`XY PATH` 之间是单个空格）exactly 只有上述两行且没有第三个 tracked/untracked
+path、staging 为空且五个 implementation files absent。任何一项不符立即 # BLOCKED；不得
+用 post-commit gate 错误拒绝这一本来合法的 review state。
+
+### 1.2 correction commit 后 dispatch gate
+
+控制 session 精确提交两份 docs 后，才运行本 gate：
+
+~~~bash
+(
+set -e
+set -o pipefail
+git rev-parse --abbrev-ref HEAD
+git rev-parse HEAD
+git rev-parse 910a4309918b1dd2fadc60c43f4250d03d84153a^
+git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a
+git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a
 git merge-base --is-ancestor \
-  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770 HEAD
+  910a4309918b1dd2fadc60c43f4250d03d84153a HEAD
+git rev-list --count \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD
+git show -s --format=%P HEAD
 git rev-list --count \
   ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD
+git diff --name-status \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD
 git diff --name-status \
   ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD
 git status --short --branch
 git diff --name-only
 git diff --cached --name-only
+for code4_file in \
+  scripts/generate_simtoolreal_sapg_update_fixture.py \
+  tests/algos/rlgames_sapg/source_update_harness.py \
+  tests/algos/rlgames_sapg/test_update_golden.py \
+  tests/fixtures/simtoolreal_sapg/source_update_fp32.npz \
+  tests/fixtures/simtoolreal_sapg/source_update_manifest.json
+do
+  test ! -e "$code4_file" || exit 1
+done
+test "$(git rev-parse --abbrev-ref HEAD)" = \
+  feat/simtoolreal-sapg-rlgames
+test "$(git rev-parse 910a4309918b1dd2fadc60c43f4250d03d84153a^)" = \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
+test "$(git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a)" \
+  -eq 1
+test "$(git rev-list --count \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD)" -eq 1
+test "$(git show -s --format=%P HEAD)" = \
+  910a4309918b1dd2fadc60c43f4250d03d84153a
+test "$(git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD)" -eq 2
+test "$(git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a)" = \
+  "$(printf 'A\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+test "$(git diff --name-status \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD)" = \
+  "$(printf 'M\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+test "$(git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD)" = \
+  "$(printf 'A\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+code4_worktree_status=$(git status --short)
+test -z "$code4_worktree_status"
+code4_staged_paths=$(git diff --cached --name-only)
+test -z "$code4_staged_paths"
 git log --oneline --decorate -16
+)
 ~~~
 
-docs-only commit 完成后的接管/dispatch gate 中，rev-list count 必须恰为 1，
-name-status 必须恰为：
-
-~~~text
-A	docs/simtoolreal_sapg_code4_clean_execution_prompt.md
-M	docs/simtoolreal_sapg_rlgames_control_handoff.md
-~~~
-
-同时工作树和 staging 必须为空。仅满足 ancestor、branch 或 clean tree 不足以授权
-dispatch；不是该 exact one-commit docs-only descendant 时立即 # BLOCKED。
+post-commit dispatch gate 必须同时证明 correction base 是 HEAD ancestor、HEAD 是 correction
+base 的 exact single-parent one-commit child、lineage/correction/cumulative 三层 count 与
+diff 全部精确、分支正确、worktree/staging clean 且五个 implementation files absent。仅满足
+ancestor、某一个 count、branch 或 clean tree 不足以授权 dispatch；任一项不精确时立即
+# BLOCKED。
 
 ## 2. 接管阅读顺序与唯一执行规格
 
@@ -116,7 +226,7 @@ dispatch；不是该 exact one-commit docs-only descendant 时立即 # BLOCKED�
    [simtoolreal_sapg_code4_clean_execution_prompt.md](simtoolreal_sapg_code4_clean_execution_prompt.md)。
 
 clean implementation plan 只保留为已经完成的 reset/revert/control-planning provenance；
-其中 checkbox checklist 不是接管 agent 的待执行清单，不得重做隔离、revert、docs commit
+其中 checkbox checklist 不是接管 agent 的待执行清单，不得重做隔离、revert、初版 docs commit
 或按其后续 task 直接实现。Code #4 的实现细节、命令、停止条件和交接格式只按 clean
 execution prompt。
 
@@ -242,12 +352,16 @@ canonical payload hashes 和 normal AMP step/scaler facts 当前都未知；不�
 
 ### 6.1 docs contract
 
-控制 session 先独立审阅本 handoff 与 clean execution prompt，只 stage 这两个 docs paths，
-运行 staged diff gate并提交一个 docs-only commit。docs writer 不拥有 Git，也不提交。
+控制 session 从 clean correction base 接收本 handoff 与 clean execution prompt 的两份
+authoritative semantic corrections，先完整通过 section 1.1 pre-commit review gate；独立
+审阅后只 stage 这两个已跟踪 docs paths，运行 staged diff gate并提交 exact 一笔 correction
+commit。correction writer 不拥有 Git，也不提交。提交后必须完整通过 section 1.2
+post-commit dispatch gate 的 topology、single-parent、三层 diff、clean/staging 和五文件
+absence assertions，才能 dispatch/resume Code #4。
 
 ### 6.2 新实现 agent
 
-docs commit 完成且工作树干净后，控制 session 直接把 clean execution prompt 原文交给
+correction commit 完成且工作树干净后，控制 session 直接把 clean execution prompt 原文交给
 一个新的内部实现 agent。该 agent：
 
 - 只新建 prompt 列出的五个 regular files；
@@ -272,8 +386,11 @@ docs commit 完成且工作树干净后，控制 session 直接把 clean executi
 5. 确认 Source 和 Target 分别先通过 evidence invariants，对称删除也会失败；
 6. 确认 56 rows、14 sequences、identity shuffle、central-before-actor、actor/central
    两 epoch 与 [12,12,12,20] 都由 events推导；
-7. 确认 prepared fields、四类 normalizer、每 batch native loss/reference、gradient、
-   actual optimizer groups/state/delta 和 scheduler 后 LR 全覆盖；
+7. 确认 prepared fields，以及四 RMS 的 role→object mapping、process-local alias proof、
+   owner-specific training transitions/forward-update events、mean/var/count snapshots；特别
+   拒绝 central input epoch 1 伪 freeze、actor input epoch 1 伪继续 update、伪造 central
+   value alias，或给 actor-model value RMS 编造 update；同时确认每 batch native
+   loss/reference、gradient、actual optimizer groups/state/delta 和 scheduler 后 LR 全覆盖；
 8. 确认 normal_fp32、normal_amp、overflow_amp 是本次 canonical Source capture 的事实，
    AMP step mask/scaler 没有从旧结果硬编码；
 9. 确认完整 NumPy/Torch CPU/CUDA RNG、explicit FP32 comparison inventory、

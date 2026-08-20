@@ -64,41 +64,113 @@ distributed、compile、export、生产算法或配置修改；这些都不属�
 feat/simtoolreal-sapg-rlgames
 ~~~
 
-clean restart 的固定 Git ancestor：
+固定 Git 身份分两层：
 
 ~~~text
-ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
+lineage base:    ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
+correction base: 910a4309918b1dd2fadc60c43f4250d03d84153a
 ~~~
 
-控制 session 提交本 prompt 后，实际 dispatch HEAD 会是该 ancestor 的 docs-only 后继，
-因此不要猜测未来 commit SHA。开始时运行并记录：
+`910a4309918b1dd2fadc60c43f4250d03d84153a` 是已提交的初版 docs commit；控制 session
+提交本轮 authoritative semantic correction 后，实际 dispatch HEAD 必须是 correction base
+的 exact single-parent one-commit child。不要猜测该 correction commit 的未来 SHA。开始时
+运行并记录：
 
 ~~~bash
+(
+set -e
+set -o pipefail
 git rev-parse --abbrev-ref HEAD
 SAPG_CODE4_START_HEAD=$(git rev-parse HEAD)
 printf '%s\n' "$SAPG_CODE4_START_HEAD"
+git rev-parse 910a4309918b1dd2fadc60c43f4250d03d84153a^
+git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a
+git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a
 git merge-base --is-ancestor \
-  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770 HEAD
+  910a4309918b1dd2fadc60c43f4250d03d84153a HEAD
+git rev-list --count \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD
+git show -s --format=%P HEAD
 git rev-list --count \
   ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD
 git diff --name-status \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD
+git diff --name-status \
   ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD
-git status --short
+git status --short --branch
 git diff --name-only
 git diff --cached --name-only
+for code4_file in \
+  scripts/generate_simtoolreal_sapg_update_fixture.py \
+  tests/algos/rlgames_sapg/source_update_harness.py \
+  tests/algos/rlgames_sapg/test_update_golden.py \
+  tests/fixtures/simtoolreal_sapg/source_update_fp32.npz \
+  tests/fixtures/simtoolreal_sapg/source_update_manifest.json
+do
+  test ! -e "$code4_file" || exit 1
+done
+test "$(git rev-parse --abbrev-ref HEAD)" = \
+  feat/simtoolreal-sapg-rlgames
+test "$(git rev-parse 910a4309918b1dd2fadc60c43f4250d03d84153a^)" = \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
+test "$(git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a)" \
+  -eq 1
+test "$(git rev-list --count \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD)" -eq 1
+test "$(git show -s --format=%P HEAD)" = \
+  910a4309918b1dd2fadc60c43f4250d03d84153a
+test "$(git rev-list --count \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD)" -eq 2
+test "$(git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..910a4309918b1dd2fadc60c43f4250d03d84153a)" = \
+  "$(printf 'A\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+test "$(git diff --name-status \
+  910a4309918b1dd2fadc60c43f4250d03d84153a..HEAD)" = \
+  "$(printf 'M\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+test "$(git diff --name-status \
+  ba16f5b490c2fcf1bf3bd81a03314b3f57d19770..HEAD)" = \
+  "$(printf 'A\tdocs/simtoolreal_sapg_code4_clean_execution_prompt.md\nM\tdocs/simtoolreal_sapg_rlgames_control_handoff.md')"
+code4_worktree_status=$(git status --short)
+test -z "$code4_worktree_status"
+code4_staged_paths=$(git diff --cached --name-only)
+test -z "$code4_staged_paths"
+)
 ~~~
 
-rev-list count 必须恰为 1，name-status 必须恰为：
+所有层次必须同时精确成立：
+
+- `910a4309^` 的输出必须 exactly 是 lineage base，且 lineage base 到 correction base 的
+  rev-list count 必须恰为 1；
+- correction base 必须是 HEAD ancestor，correction base 到 HEAD 的 count 必须恰为 1，
+  `git show -s --format=%P HEAD` 必须只输出完整 correction base SHA，不能有第二 parent；
+- lineage base 到 HEAD 的 cumulative count 必须恰为 2；
+- lineage base 到 correction base 的 name-status 必须恰为：
 
 ~~~text
 A	docs/simtoolreal_sapg_code4_clean_execution_prompt.md
 M	docs/simtoolreal_sapg_rlgames_control_handoff.md
 ~~~
 
-开始实现前必须是正确分支、固定 ancestor 的 exact one-commit docs-only descendant、
-工作树干净、staging 为空，而且下文五个 Code #4 文件都不存在。仅证明 ancestor 或 clean
-tree 不够；commit count 或两路径 status 任一不精确都返回 # BLOCKED，不得自行清理、
-切换或覆盖。
+- correction base 到 HEAD 的 correction diff 必须恰为：
+
+~~~text
+M	docs/simtoolreal_sapg_code4_clean_execution_prompt.md
+M	docs/simtoolreal_sapg_rlgames_control_handoff.md
+~~~
+
+- lineage base 到 HEAD 的 cumulative diff 必须仍恰为：
+
+~~~text
+A	docs/simtoolreal_sapg_code4_clean_execution_prompt.md
+M	docs/simtoolreal_sapg_rlgames_control_handoff.md
+~~~
+
+开始实现前还必须是正确分支、工作树干净、staging 为空，而且上述五个 Code #4 文件都
+不存在。仅证明 ancestor、某一个 count 或 clean tree 不够；任一 parent、count、diff、
+branch、clean/staging 或五文件 absence 不精确都返回 # BLOCKED，不得自行清理、切换或覆盖。
 
 固定 Source：
 
@@ -269,29 +341,51 @@ clip_value=true 均从固定 train owner 核对并记录。为接入已经 augme
 
 ## 6. 必须使用的 native owner
 
-先用 nl -ba 在固定 Source checkout 核对实现，再通过真实对象调用：
+先从固定 Source commit 的 Git object database 读取 owner blobs、用 `nl -ba` 核对实现，再
+通过真实对象调用。以下命令不读取或信任 Source worktree bytes：
 
 ~~~bash
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/common/a2c_common.py \
-  | sed -n '360,393p;1370,1532p'
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/algos_torch/a2c_continuous.py \
-  | sed -n '105,230p'
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/algos_torch/central_value.py \
-  | sed -n '223,292p'
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/common/datasets.py \
-  | sed -n '25,80p'
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/common/common_losses.py \
-  | sed -n '10,48p'
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/algos_torch/torch_ext.py \
-  | sed -n '29,38p;143,154p'
-nl -ba /home/user/ws/lemon/simtoolreal/rl_games/rl_games/common/schedulers.py \
-  | sed -n '20,35p'
+(
+set -e
+set -o pipefail
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/common/a2c_common.py \
+  | nl -ba | sed -n '360,393p;429,437p;1370,1532p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/algos_torch/a2c_continuous.py \
+  | nl -ba | sed -n '14,79p;105,234p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/algos_torch/central_value.py \
+  | nl -ba | sed -n '207,292p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/algos_torch/models.py \
+  | nl -ba | sed -n '36,62p;245,295p;440,474p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/algos_torch/running_mean_std.py \
+  | nl -ba | sed -n '10,94p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/common/datasets.py \
+  | nl -ba | sed -n '25,80p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/common/common_losses.py \
+  | nl -ba | sed -n '10,48p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/algos_torch/torch_ext.py \
+  | nl -ba | sed -n '29,38p;143,154p'
+git -C /home/user/ws/lemon/simtoolreal show \
+  2a9917533bfea70419ed2667a511d7238e5b3abc:rl_games/rl_games/common/schedulers.py \
+  | nl -ba | sed -n '20,35p'
+)
 ~~~
 
-- rl_games.common.a2c_common continuous train_epoch 与 prepare_dataset；
-- rl_games.algos_torch.a2c_continuous.A2CAgent.calc_gradients；
+- rl_games.common.a2c_common 的 set_train、continuous train_epoch 与 prepare_dataset；
+- rl_games.algos_torch.a2c_continuous 的 central constructor/value alias、
+  A2CAgent.calc_gradients 与 train_actor_critic；
 - rl_games.common.datasets.PPODataset slicing 与 update_mu_sigma；
-- rl_games.algos_torch.central_value.CentralValueTrain.train_net；
+- rl_games.algos_torch.central_value.CentralValueTrain.train_critic 与 train_net；
+- rl_games.algos_torch.models 的 input norm_obs、continuous value forward/denorm path 与
+  ModelCentralValue.Network.forward；
+- rl_games.algos_torch.running_mean_std 的 training-conditional forward/update；
 - rl_games.common.common_losses 的 actor/value loss；
 - rl_games.algos_torch.torch_ext 的 apply_masks 与 policy_kl；
 - rl_games.common.schedulers 的 native scheduler；
@@ -388,26 +482,48 @@ validator 要从 native events 证明 value normalizer update 发生在 dataset 
 
 ### 7.4 四类 normalizer
 
-每个 normal case 至少在 after_prepare、每个 central epoch 后、每个 actor epoch 后保存：
+每个 normal case 必须先在各自进程内 fail closed 建立以下固定 role→object mapping，再记录
+after_prepare、每个 central epoch 后、每个 actor epoch 后和 final 的 snapshot：
 
-- actor input RMS running_mean/running_var/count 与 train/eval；
-- central input RMS running_mean/running_var/count 与 train/eval；
-- actor shared value RMS running_mean/running_var/count 与 train/eval；
-- central value RMS running_mean/running_var/count 与 train/eval。
+1. actor input RMS = `agent.model.running_mean_std`；
+2. central input RMS = `agent.central_value_net.model.running_mean_std`；
+3. actor-model value RMS = `agent.model.value_mean_std`，它是 distinct object；
+4. active/central value RMS = `agent.value_mean_std`，并且必须以 runtime
+   `agent.value_mean_std is agent.central_value_net.model.value_mean_std` 证明 alias。
 
-Source evidence invariant 必须分别识别这四个 owner，证明：
+alias 只允许在 Source 进程和 Target 进程内分别用 `is` 验证；不得跨进程比较，也不得把
+raw `id()` 持久化为 fixture/manifest identity。四个 role 都要分别保存完整
+running_mean、running_var、count、training mode，以及每次 forward 的 owner context、输入
+row count、进入/退出时 mode、state/count before/after 和是否实际 update。mode 为
+`training=true` 只表示允许 update，不等于已经发生 forward/update。
 
-- prepare_dataset 的 value normalizer update 和 dataset handoff 顺序；
-- actor/central input RMS 在各自第一组真实 train forward 中更新；
-- owner 在第一 mini-epoch 后进入 native eval/frozen boundary；
-- 第二 mini-epoch 的 input RMS count/state 不再更新；
-- shared value RMS 与 central value RMS 没有被混名、合并或拿 input RMS 代替。
+固定 native transition contract 是：
 
-对四个 owner 都必须从完整 snapshots 推导“第一次实际允许更新的 phase”和“后续实际
-freeze 的 phase”；不要假定四者在同一调用点更新，也不要用一个公共 boolean 代替各自
-mean/var/count 与 train/eval transition。
+- 初始四对象都是 count=1、training=true。after_prepare 时 actor input、central input、
+  actor-model value 仍是 count=1、training=true；active/central value 经 values 与 returns
+  两次 native forward/update，count 按 1→57→113，然后 native eval，故 count=113、
+  training=false。该 update 必须发生在两个 dataset handoff 前。
+- central input 的每个 batch 都经过 `train_critic()->self.train()`，所以 epoch 0 的四个
+  train-forward 将 count 从 1 更新到 57，epoch 0 尾 native eval；epoch 1 第一 batch 又由
+  `self.train()` 恢复 training=true，四个 train-forward继续把 count 更新到 113，epoch 1
+  尾再次 eval。final 为 count=113、training=false。epoch 0 尾 eval 不是永久 freeze。
+- actor input 在 actor epoch 0 的四个真实 batch forward 更新 count 1→57，epoch 0 尾
+  native eval；epoch 1 仍完整执行四个 batch forward 和 optimizer step，但 input RMS
+  training=false，mean/var/count 均不变，epoch 1 尾再次 eval，final 仍 count=57、
+  training=false。
+- actor-model value RMS 不参与这条 native update path 的 forward/update；它始终 count=1、
+  training=true、forward count=0。必须把它自己的 mode 与 mean/var/count 独立记录，不能
+  编造 first update 或 freeze，也不能与 active value RMS 合并。
+- active/central value RMS 只在 prepare_dataset 通过上述 alias 对 values 与 returns 做两次
+  native forward/update，随后没有 value-RMS forward。central 的 `self.train()` 会在后续
+  batch 把其 training flag 设回 true，所以 central epoch 0、epoch 1 与 final 都是
+  count=113、training=true；central train-forward 不调用 value RMS，mean/var/count 不再
+  更新。
 
-每个 owner/epoch snapshot 缺一项时，即使 Source 与 Target 同时缺失也必须失败。
+Source capture 与 Target replay 必须各自先验证 role→object identity/alias、全部
+owner-specific mode transition 与 forward/update event、mean/var/count transition；两边
+各自 invariants 完整通过后才允许 semantic 或 numeric comparison。任一 role/object、alias、
+event 或 snapshot 字段缺失时，即使 Source 与 Target 同时缺失也必须失败。
 
 ### 7.5 每个 actor batch 的 native update evidence
 
@@ -515,13 +631,17 @@ apply_masks diagnostic 必须使用局部确定性规则且不额外消费 globa
 source_update_fp32.npz 保存必要 frozen arrays、小型 native tensors、row identity、完整 RNG
 state、overflow probe 和 numeric traces。source_update_manifest.json 保存 provenance、
 platform、owner/default overrides、module inventory、events、metadata、signatures、
-normalizers、optimizer/scaler relations、comparison inventory 和 generation command。
+normalizers、role/object mapping、process-local alias proof、owner-specific mode transitions 与
+forward/update events、optimizer/scaler relations、comparison inventory 和 generation command。
 
 manifest 至少包含 schema_version、generation_mode=source-only、固定 Source HEAD/tree、
 train/task owner path/blob/SHA256、两个 Code #3 file anchors、loaded Source module
 path/blob/SHA256 inventory、canonical platform、Source defaults/test-only overrides、
 三 case inventory、NPZ array inventory、event/invariant schema、normalizer/RNG/scaler
-evidence、tolerances、FP32 comparison inventory、NPZ file SHA 和 canonical payload SHA。
+evidence、四 RMS role/object mapping 与 distinctness、process-local active/central value alias
+proof、owner-specific training transitions/forward-update events、tolerances、FP32 comparison
+inventory、NPZ file SHA 和 canonical payload SHA。schema 不得持久化 raw `id()` 或用它做
+跨进程 identity comparison。
 
 每个 NPZ array 在 manifest 中有且只有一个 exact：
 
@@ -604,7 +724,11 @@ capture，再允许递归相等。它至少独立检查：
 - identity shuffle 次数、56 rows、14 sequences；
 - actor/central 两 epoch、八 batches、完整 derived tuple 与 [12,12,12,20]；
 - central-before-actor 和 prepare/dataset顺序；
-- prepared tensors、dataset handoff、四类 normalizer/epoch snapshots；
+- prepared tensors、dataset handoff、四 RMS role/object mapping、distinctness、进程内 alias、
+  owner-specific transitions/forward-update events 与完整 phase snapshots；
+- exact RMS transition contract；必须拒绝 central input epoch 1 伪 freeze、actor input
+  epoch 1 伪继续 update、伪造 active/central value alias，以及给 actor-model value RMS
+  编造 forward/update；
 - 每 actor/central batch 的 native loss/gradient/clip/optimizer coverage；
 - update_mu_sigma row reference 与 scheduler/update_lr coverage；
 - autocast/scaler/growth/step mask/parameter delta relations；
@@ -614,7 +738,8 @@ capture，再允许递归相等。它至少独立检查：
 
 human-readable evidence_inventory 只能在 validator 成功后由真实 event coverage生成，不能
 是预先写好的标签。即使 Source 与 Target 同时删除相同 loss events、prepared field、
-normalizer epoch、optimizer result 或 scaler transition，也必须在 equality 前失败。
+normalizer role/object/alias/transition/forward-update event、optimizer result 或 scaler
+transition，也必须在 equality 前失败。
 
 ## 9. File/path 安全
 
@@ -698,6 +823,11 @@ uv run --python 3.11 \
 6. overflow 路径改成无条件 underlying optimizer.step；
 7. 把第一次 numeric subtraction 移到 complete metadata/semantic gate 前；
 8. 把 expected_package_root 改成错误 namespace。
+9. 把 central input RMS 的 epoch 1 events/count 篡改为 epoch 0 后永久 freeze；
+10. 把 actor input RMS 的 epoch 1 四次 forward 篡改为继续更新 mean/var/count；
+11. 伪造 `agent.value_mean_std` 与 central model value RMS 的进程内 alias，或以 raw `id()`
+    冒充可跨进程 identity；
+12. 给 actor-model value RMS 编造 native forward/update、first update 或 freeze。
 
 还必须有 inventory missing/extra、reshape、dtype、content-only、symlink/path cases 的永久
 mutation tests。任何改变文件的临时 mutant 都必须用 apply_patch；每次先记录文本文件
@@ -881,10 +1011,11 @@ cu126、CPU AMP 或其他 device/version matrix。
 4. Target distribution/root/patched-hash provenance；
 5. Python/Torch/CUDA/cuDNN/driver/GPU/flags 的完整实际 canonical identity；
 6. code #3 两个固定 hashes，以及重新 capture 的 update NPZ/manifest/payload 三 anchors；
-7. 初始 collection RED、八类 required mutation RED、每次恢复 hash 与最终 GREEN；
+7. 初始 collection RED、十二类 required mutation RED、每次恢复 hash 与最终 GREEN；
 8. 56 rows/14 sequences、每 normal case identity shuffle 次数、actor/central derived
    epochs/batches/order；
-9. prepared tensors、dataset handoff、四 normalizers 的 first-update/second-freeze evidence；
+9. prepared tensors、dataset handoff、四 RMS 的 role→object mapping、process-local alias proof、
+   owner-specific training transitions/forward-update events 和 mean/var/count snapshots；
 10. 每 batch loss branches、entropy coefficient/product、apply_masks denominator、native
     total loss、new mu/sigma、KL/update_mu_sigma；
 11. actor/central actual param groups、scaled/unscaled/clip、delta/state、scheduler/update_lr 后 LR；
