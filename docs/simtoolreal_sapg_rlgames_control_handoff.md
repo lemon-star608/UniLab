@@ -38,13 +38,11 @@ staged: empty
 untracked: exactly five Code #4 files listed in section 5
 ```
 
-本文自身会以一个后继 docs commit 提交，因此新 session 的实际 HEAD 应是 `5b083333...` 的直接后继，而不是仍等于该 parent。若 branch、ancestor、tracked diff、staging area 或未跟踪文件范围不同，先调查差异；不得用 `stash`、`reset`、`clean`、`checkout` 或删除文件来“恢复”预期状态。
+本文及其交接修订以 docs-only commits 提交，因此新 session 的实际 HEAD 应是 `5b083333...` 的后继，且中间只能是这些交接文档提交，而不是仍等于该 parent。若 branch、ancestor、tracked diff、staging area 或未跟踪文件范围不同，先调查差异；不得用 `stash`、`reset`、`clean`、`checkout` 或删除文件来“恢复”预期状态。
 
-最新返工提示词自身记录的 expected HEAD 是它提交前的 `dbe5bf3a...`，这是历史锚点，不是新 session 应切回的提交。实际实现 HEAD 应包含 `dbe5bf3a...`、`5b083333...` 和本文的 docs commit 作为 ancestors，同时仍保持 tracked/staged 为空及五文件边界。当前唯一下一步是让实现 session 执行：
+最新返工提示词自身记录的 expected HEAD 是它提交前的 `dbe5bf3a...`，这是历史锚点，不是新 session 应切回的提交。实际实现 HEAD 应包含 `dbe5bf3a...`、`5b083333...` 和最新交接 docs commits 作为 ancestors，同时仍保持 tracked/staged 为空及五文件边界。
 
-```text
-先看 docs/simtoolreal_sapg_rlgames_control_handoff.md 的第 1、5、6、7 节，再看 docs/simtoolreal_sapg_code4_review_rework2_prompt.md，然后执行。
-```
+Code #4 第二次返工已经由现有实现 session 同步执行。新控制 session 的当前动作不是再次下发 prompt，也不是产出下一份返工 prompt，而是完整理解本文与总体计划、只读核对 Git 状态，然后等待现有实现 session 的返工报告。等待期间不要编辑或检查出 Code #4 的中间态结论；收到完整交接后再按 section 7.3 独立审查。
 
 在 Code #4 返工被独立审查、接受并提交前，不得进入 Code #5。
 
@@ -150,7 +148,7 @@ tests/fixtures/simtoolreal_sapg/source_update_fp32.npz
 tests/fixtures/simtoolreal_sapg/source_update_manifest.json
 ```
 
-2026-08-20 交接时的实际 anchors：
+2026-08-20 第二次返工开始前的实际 anchors：
 
 ```text
 update NPZ SHA256:
@@ -176,7 +174,7 @@ rollout manifest:
 785443d10e2037e0ca4e4b044dd1dc8207b438ea69555726eac9501ad8207d3f
 ```
 
-旧实现报告曾声称 update manifest file hash 是 `bd8aa7fe...`，但该值与当前工作树不符；不得引用它。第二次返工完成后必须从最终文件重新计算全部 hash。
+旧实现报告曾声称 update manifest file hash 是 `bd8aa7fe...`，但该值与返工开始前的工作树不符；不得引用它。现有实现 session 正在修改这五个文件，因此新控制 session 看到不同的中间 hash 不构成异常，也不得要求回退；第二次返工完整交接后必须从最终文件重新计算全部 hash。
 
 第一次返工中已有且必须保留的事实：
 
@@ -210,15 +208,11 @@ rollout manifest:
 
 ## 7. Code #4 控制流程
 
-### 7.1 下发与实现边界
+### 7.1 当前 writer 与等待边界
 
-向实现 session 只发送：
+最新 Code #4 第二次返工 prompt 已经下发，现有实现 session 是这五个文件的唯一 writer。新控制 session 不再发送同一 prompt、不启动重复实现 session、不编辑 Code #4 文件，也不在实现完成前写第三份返工 prompt。它只负责理解整体架构并等待完整返工报告。
 
-```text
-先看 docs/simtoolreal_sapg_rlgames_control_handoff.md 的第 1、5、6、7 节，再看 docs/simtoolreal_sapg_code4_review_rework2_prompt.md，然后执行。
-```
-
-实现 session 必须完整读取该文件列出的三份 Code #4 文档。它只能修改 section 5 的五个文件，不得修改 vendor、Source、Code #3、生产代码或配置，不得增加第六个文件，不得进入 Code #5。
+现有实现 session 应完整读取最新提示词列出的三份 Code #4 文档。它只能修改 section 5 的五个文件，不得修改 vendor、Source、Code #3、生产代码或配置，不得增加第六个文件，不得进入 Code #5。
 
 实现 session 不得执行 `git add`、`git commit`、`git push`、PR、`stash`、`reset`、`clean` 或切换 branch。所有 Python 命令使用 `uv run`，所有手工编辑使用 `apply_patch`。
 
@@ -255,7 +249,7 @@ FP32 frozen tensors 使用 `atol=1e-6, rtol=1e-5`；AMP 单独验证 owner path�
 
 fresh validation 使用最新返工提示词中的精确命令，最少包括 focused Code #4、完整 SAPG suite、vendor suite、vendor audit、scoped/root Ruff、format check、`git diff --check`。所有 required pytest 必须零 skip。此阶段不运行其他 Python/CUDA 矩阵，也不运行 `make test-all`。
 
-若审查发现问题，写新的、证据明确的返工 prompt 文档并提交该文档，然后让同一实现 session 继续；不要在控制 session 与实现 session 同时写工作树。
+若收到完整返工报告后的审查仍发现问题，先把 findings 和证据汇报 maintainer；只有 maintainer 决定继续返工后，才写新的、证据明确的返工 prompt 文档并提交，再让同一实现 session 继续。不要在控制 session 与实现 session 同时写工作树。
 
 ### 7.4 接受与提交
 
@@ -355,10 +349,10 @@ CPU affinity 不是 SimToolReal/SAPG contract。M0-dev owner 必须显式 `env.c
 
 新控制 session 不需要重做已经提交的 Code #1–#3，也不要重新运行无关 Python/CUDA 矩阵。首轮只应：
 
-1. 核对 section 1 和 section 5 的 Git 实况；
-2. 下发最新 Code #4 第二次返工提示词；
-3. 等实现 session 交接后独立审查 Code #4；
-4. 有问题则写精确返工 prompt，无问题则只提交五个 Code #4 文件；
+1. 完整阅读根 `AGENTS.md`、总体计划、本文及三份 Code #4 prompt，理解 Source owner、adapter、MuJoCoUni 和十个 code batch 的边界；
+2. 只读核对 section 1 和 section 5 的 Git 实况，确认现有实现 session 仍是唯一 writer；
+3. 不下发重复 prompt、不编辑工作树、不从中间文件形成审查结论，等待现有实现 session 的完整返工报告；
+4. 收到报告后独立审查 Code #4；有问题先向 maintainer 汇报 findings，由 maintainer 决定是否再返工，无问题则只提交五个 Code #4 文件；
 5. Code #4 提交并验证后，向 maintainer 汇报 evidence 与 commit SHA，再起草 Code #5 prompt；必须等 maintainer 明确批准 Code #5 execution 后才能下发。
 
 这份文档是控制状态交接，不是对 Code #4 或整条迁移已完成的声明。
