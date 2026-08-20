@@ -1,5 +1,8 @@
 # SimToolReal SAPG Code #4–#10 自主控制设计
 
+> 2026-08-21：本文件的早期 clean-restart 基线只保留为历史记录。Code #4/#5 当前范围与
+> 验收以 `simtoolreal_sapg_code4_5_io_parity_design.md` 为准；Code #6 前仍需停止确认。
+
 ## 目标
 
 在 `feat/simtoolreal-sapg-rlgames` 分支中撤销尚未接受的 Code #4
@@ -66,23 +69,19 @@ Code #4–#10 严格串行；前一批未接受、验证和提交时不得开始
 
 ### Code #4：update 与 AMP oracle
 
-主要结果是重新建立干净的 O1b Source→Target oracle。新规格合并原始提示词中仍有效的
-要求和两轮审查暴露的 evidence-completeness 风险，但不恢复两份返修文档本身。实现仍限
-五个文件和小于 8 MiB fixture，必须调用 native Runner/A2CAgent/PPODataset/
-CentralValueTrain/loss/optimizer/GradScaler owner，不复制算法公式。
-
-验收包括 frozen 56-row handoff、central-before-actor、两个 mini-epoch、loss branches、
-normalizer、KL/reference、scheduler、gradient/clip、optimizer、FP32/AMP/overflow、RNG、
-完整 evidence invariants、metadata-before-numeric 和 mutation tests。只验证固定
-Python 3.11、Torch 2.7.0+cu128、RTX 4090 canonical 平台。本批不运行
-`make test-all`，不进入 checkpoint/player。
+主要结果是 O1b Source→Target oracle。2026-08-20 maintainer 已将验收收缩为
+`simtoolreal_sapg_code4_5_io_parity_design.md` 定义的完整状态输入输出保真：同一 frozen
+batch/config/model/optimizer/scaler/RMS/LR/RNG 输入，经过 native complete update 后比较
+完整最终可观察状态。实现仍限五个文件，必须调用 native Runner/A2CAgent/PPODataset/
+CentralValueTrain/optimizer/GradScaler owner，不复制算法公式；不再要求逐 primitive ledger、
+8 MiB 硬预算或穷举 mutation/path matrix。本批不运行 `make test-all`。
 
 ### Code #5：checkpoint 与 player oracle
 
-主要结果是 O1c：固定 Source `.pth` payload、实际可恢复字段、未保存 RNG 和
-`env_state=None` 边界、外部恢复 RNG 后的首个 action/value/update，以及 canonical
-6-env 和 `N != 6` player routing。仍是算法 oracle，不接生产训练入口。目标五文件，
-fixture 总计小于 2 MiB。
+主要结果是 O1c：固定 Source `.pth` payload、load 后完整可观察状态、外部恢复 RNG 后的
+首个 action/value/update，以及 canonical 6-env 和 `N != 6` player routing。按同一完整
+状态输入输出标准验收，记录未保存 RNG 和 `env_state=None` 边界，但不做逐字段 forensic
+ledger。仍是算法 oracle，不接生产训练入口。目标五文件，不设 fixture hard byte budget。
 
 ### Code #6：MuJoCo runtime public contracts
 
@@ -123,10 +122,14 @@ MuJoCoUni owner 仓库中的生产修改仍需单独的普通中文 roadmap 和�
 
 ## 人工批准点
 
+> 2026-08-20 update：maintainer 已批准 Code #4/#5 使用
+> `simtoolreal_sapg_code4_5_io_parity_design.md` 的完整状态输入输出标准，并批准 Code #4
+> 接受后自动进入 Code #5。下列逐批批准规则现从 Code #6 开始适用。
+
 控制 session 承担 prompt 编写和传递，但以下 maintainer 判断不能自动化：
 
 1. 本设计文件提交后的书面 spec 审阅；通过后 Code #4 可以开始。
-2. Code #5–#10 每批开始前，对该批普通中文范围、非目标、规模和永久成本的 execution
+2. Code #6–#10 每批开始前，对该批普通中文范围、非目标、规模和永久成本的 execution
    approval。该批准不要求用户转发 prompt。
 3. MuJoCoUni M0-release 的独立 roadmap 和外部仓库修改授权。
 4. 最终真实 smoke、依赖 provenance、完整测试和 CI 证据到齐后的 support claim 产品判断。

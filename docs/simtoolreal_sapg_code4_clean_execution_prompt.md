@@ -1,6 +1,11 @@
 # SimToolReal SAPG Code #4 clean execution prompt
 
-> 给新的实现 agent：本文件是 Code #4 当前唯一执行规格。先完整阅读仓库根目录
+> **已废止：** 2026-08-20 maintainer 批准采用完整状态输入输出保真标准。本文关于逐
+> primitive forensic ledger、private capability、8 MiB hard blocker 和穷举 mutation/path
+> matrix 的要求不再执行。当前唯一验收设计见
+> `docs/simtoolreal_sapg_code4_5_io_parity_design.md`。
+
+> 以下正文只保留为历史 provenance，不再是执行规格。新的实现 agent 先完整阅读仓库根目录
 > AGENTS.md，再按本文从干净工作树重新实现。不要读取、恢复或复用任何被隔离的旧
 > Code #4 产物；它们不是 oracle、fixture seed 或实现参考。不要重新规划，不要进入
 > Code #5。完成后保持全部改动未暂存、未提交，并把实际证据交回控制 session。

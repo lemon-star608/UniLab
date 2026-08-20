@@ -1,11 +1,20 @@
 # SimToolReal SAPG RL-Games 迁移控制交接
 
-> 本文面向接管分支的控制/审查 session，记录 2026-08-20 Code #4 clean restart 后的
-> Git、授权和依赖实况。当前实现规格只有
-> [simtoolreal_sapg_code4_clean_execution_prompt.md](simtoolreal_sapg_code4_clean_execution_prompt.md)；
-> 历史 Code #4 规格和隔离产物都不得下发、恢复或作为 oracle 证据。
+> **2026-08-20 acceptance update：** maintainer 已批准 Code #4/#5 改用完整状态输入输出
+> 保真标准，并批准 Code #4 完成后自动进入 Code #5。当前设计见
+> `docs/simtoolreal_sapg_code4_5_io_parity_design.md`；旧 Code #4 clean execution prompt 的
+> forensic evidence 要求已废止。Code #6 及以后仍未自动批准。
 
-## 1. 当前真实状态
+> 本文面向接管分支的控制/审查 session。除页首 acceptance update 和新的输入输出保真
+> 设计外，正文记录的是 Code #4 clean restart 时的历史 Git/授权快照；若有冲突，以只读
+> Git 实况和 `simtoolreal_sapg_code4_5_io_parity_design.md` 为准。隔离产物仍不得恢复或
+> 作为 oracle 证据。
+
+## 1. 历史 clean-restart 状态（已失效）
+
+本节的 HEAD、clean tree、absence assertions 和 correction gates 只解释此前为何重启，
+不得在当前输入输出保真实施中执行。2026-08-21 的实际起点是 `3bf2722f`，工作树已有新的
+四份设计修改和五个 Code #4 中间文件；它们由当前控制 session 审查、精简和提交。
 
 唯一工作仓库：
 
@@ -75,7 +84,7 @@ ba16f5b490c2fcf1bf3bd81a03314b3f57d19770
 post-commit dispatch gate 后，才直接派出一个新的内部实现 agent。该 agent 活跃期间，它是
 五个 Code #4 路径的唯一 writer，控制 session 不同时编辑。
 
-Code #5 未批准，不能写其 prompt、派 agent 或开始实现。
+Code #5 现已批准，但只能在 Code #4 接受并提交后按新的输入输出保真设计开始。
 
 ### 1.1 correction commit 前 review gate
 
@@ -222,17 +231,16 @@ ancestor、某一个 count、branch 或 clean tree 不足以授权 dispatch；�
 4. Code #4–#10 控制设计
    [simtoolreal_sapg_code4_10_autonomous_control_design.md](simtoolreal_sapg_code4_10_autonomous_control_design.md)；
 5. 本文；
-6. 当前唯一 Code #4 执行规格
-   [simtoolreal_sapg_code4_clean_execution_prompt.md](simtoolreal_sapg_code4_clean_execution_prompt.md)。
+6. 当前唯一 Code #4/#5 验收设计
+   [simtoolreal_sapg_code4_5_io_parity_design.md](simtoolreal_sapg_code4_5_io_parity_design.md)。
 
 clean implementation plan 只保留为已经完成的 reset/revert/control-planning provenance；
 其中 checkbox checklist 不是接管 agent 的待执行清单，不得重做隔离、revert、初版 docs commit
-或按其后续 task 直接实现。Code #4 的实现细节、命令、停止条件和交接格式只按 clean
-execution prompt。
+或按其后续 task 直接实现。Code #4/#5 的验收边界只按新的输入输出保真设计。
 
 总体计划和控制设计提供架构、十批依赖与长期治理；若其中历史“当前状态”与 section 1
-冲突，以 section 1 和只读 Git 实况为准。clean execution prompt 自包含五文件实现与
-验收要求，是唯一可直接下发的 Code #4 prompt；不得把其他历史材料拼成增补指令。
+冲突，以页首 acceptance update、输入输出保真设计和只读 Git 实况为准。旧 clean
+execution prompt 只保留为历史 provenance，不得继续下发其中的 forensic 要求。
 
 ## 3. 已批准的总体架构
 
@@ -361,8 +369,7 @@ absence assertions，才能 dispatch/resume Code #4。
 
 ### 6.2 新实现 agent
 
-correction commit 完成且工作树干净后，控制 session 直接把 clean execution prompt 原文交给
-一个新的内部实现 agent。该 agent：
+控制 session 把输入输出保真设计交给内部实现 agent。该 agent：
 
 - 只新建 prompt 列出的五个 regular files；
 - 所有手工编辑和 mutation恢复使用 apply_patch；
@@ -370,7 +377,7 @@ correction commit 完成且工作树干净后，控制 session 直接把 clean e
 - Source 和 Target 使用独立进程与 namespace；
 - 不执行 git add/commit/push/PR、stash/reset/clean/checkout/branch；
 - 不运行 make test-all；
-- 不进入 Code #5。
+- Code #4 未接受并提交前不进入 Code #5。
 
 实现 agent 的 # DONE 只代表停止写入和交回证据，不代表接受。
 
@@ -419,7 +426,7 @@ git commit -m "test: lock SAPG update and AMP semantics"
 ~~~
 
 必须看到 exactly five added paths。提交后控制 session 复跑 Code #4 key gates并确认干净
-工作树。本批不运行 make test-all。Code #4 接受不自动批准 Code #5。
+工作树。本批不运行 make test-all。Code #4 接受后按页首 decision 自动进入 Code #5。
 
 ## 7. 十批路线与不可调换依赖
 
@@ -431,7 +438,7 @@ git commit -m "test: lock SAPG update and AMP semantics"
 | 2 | compatibility、dual-hash、network/config oracle | 完成 |
 | 3 | rollout/GAE/augmentation/shuffle/RNG oracle | 完成 |
 | 4 | update/AMP oracle | clean restart 当前批 |
-| 5 | checkpoint/resume/player oracle | 未批准、未开始 |
+| 5 | checkpoint/resume/player oracle | 已批准；Code #4 后串行开始 |
 | 6 | M0-dev、source-model、wrench、autoreset public contracts | 未开始；执行前单独确认 |
 | 7 | 600-tool assets、task foundations、T0 | 未开始；执行前单独确认 |
 | 8 | real MuJoCo env composition、NpEnv contract、T1 | 未开始；执行前单独确认 |
@@ -465,7 +472,7 @@ Code #3/#4/#5 三个算法 oracle 不能 squash。每个 batch 只有一个主�
 Code #6 public contracts、Code #9 production path 和 Code #10 support promotion 的产品
 方向已在总体设计中确认，但具体 batch 仍必须在开始前用普通中文说明只做什么、不做什么、
 规模和永久成本，并得到明确 execution approval；新增未列明 public surface/owner/scope
-仍须再次确认。Code #5 当前连普通 batch approval 都没有。
+仍须再次确认。Code #5 的输入输出保真 batch 已由 2026-08-20 acceptance update 批准。
 
 ## 8. MuJoCoUni M0-dev 与 M0-release
 
@@ -502,7 +509,7 @@ oracles 或早期 M0-dev smoke。MuJoCoUni owner 仓库的生产修改仍需要�
 每批严格串行：
 
 1. 控制 session 写并审查 batch 规格；
-2. maintainer 给出该 batch execution approval；
+2. maintainer 给出该 batch execution approval；Code #5 使用页首已记录的现有批准；
 3. 一个实现 agent 独占声明路径，先 RED 后 GREEN；
 4. 实现 agent 停止写入并交回完整证据；
 5. 控制 session 独立 scope/spec/quality/provenance review 和 fresh validation；
@@ -540,8 +547,8 @@ M0-release clean-install artifact 身份固定、真实 train/play/profile 与 m
 - required test 有 skip/failure、provenance 不完整或 evidence coverage不足；
 - M0-dev 只能来自 dirty/unversioned sibling；
 - exact resume 需要新 public env snapshot contract；
-- Code #5 或其他下一 batch 尚无明确 execution approval；
+- Code #6 或其他未获批准的下一 batch 尚无明确 execution approval；
 - 发现 writer overlap，无法在不覆盖他人改动的情况下继续。
 
-本 handoff 只授权控制 session 完成两份 clean docs 的审查/提交，并按唯一 clean prompt
-调度 Code #4。它不批准 Code #5，也不是 Code #4 或整条迁移已经完成的声明。
+本 handoff 的历史授权已由页首 acceptance update 更新：Code #4/#5 按输入输出保真设计
+串行执行；它仍不是 Code #4、Code #5 或整条迁移已经完成的声明。
