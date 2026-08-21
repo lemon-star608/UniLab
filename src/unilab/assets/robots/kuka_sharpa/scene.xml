@@ -14,8 +14,10 @@
   -->
   <include file="kuka_sharpa.xml"/>
 
-  <option timestep="0.0083333" gravity="0 0 -9.81">
-    <flag contact="enable" multiccd="disable"/>
+  <option timestep="0.008333333333333333" gravity="0 0 -9.81"
+    integrator="implicitfast" solver="Newton" cone="elliptic" impratio="10"
+    iterations="100" ls_iterations="50">
+    <flag contact="enable" multiccd="enable"/>
   </option>
 
   <statistic center="0 0.3 0.5" extent="1.5"/>

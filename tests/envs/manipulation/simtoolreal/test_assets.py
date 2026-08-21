@@ -86,6 +86,23 @@ def test_training_asset_inventory_is_closed() -> None:
     assert _sha256(scene_xml) == provenance["xml"]["scene"]["target_sha256"]
     assert _sha256(ASSET_ROOT / "LICENSE.simtoolreal") == provenance["licenses"][0]["sha256"]
     assert _sha256(ASSET_ROOT / "LICENSE.kuka_iiwa") == provenance["licenses"][1]["sha256"]
+    menagerie_license = next(
+        entry
+        for entry in provenance["licenses"]
+        if entry["target"] == "assets/menagerie_sharpa_wave/LICENSE"
+    )
+    assert _sha256(MESH_ROOT / "menagerie_sharpa_wave/LICENSE") == menagerie_license["sha256"]
+    ancillary = {
+        entry["target"]: entry for entry in provenance["additional_assets"]
+    }
+    for target in EXPECTED_ANCILLARY - {"menagerie_sharpa_wave/LICENSE"}:
+        assert _sha256(MESH_ROOT / target) == ancillary[target]["sha256"]
+    assert provenance["menagerie_sharpa_wave"]["repository_commit"] == (
+        "da76818e269b82289eba39808e2fb91d679d6994"
+    )
+    assert provenance["menagerie_sharpa_wave"]["sharpa_directory_commit"] == (
+        "c1a4eeb85694ae1dffe33ff1797d4e528928a133"
+    )
     special = next(
         entry
         for entry in provenance["meshes"]
