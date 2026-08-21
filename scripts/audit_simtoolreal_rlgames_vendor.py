@@ -40,7 +40,10 @@ FIXED_METADATA_SHA256 = {
     "pyproject.toml": "f26bab9e4118b864d7af26a3318cba80ee5a2ca08c3b0eda27926f9a40f0d7e5",
 }
 VENDOR_RUFF_EXCLUSION = "third_party/simtoolreal_rl_games"
-GIT_ATTRIBUTES_CONTENT = b"third_party/simtoolreal_rl_games/rl_games/**/*.py -whitespace\n"
+GIT_ATTRIBUTES_CONTENT = (
+    b"third_party/simtoolreal_rl_games/rl_games/**/*.py -whitespace\n"
+    b"src/unilab/assets/robots/kuka_sharpa/LICENSE.kuka_iiwa -whitespace\n"
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_VENDOR_ROOT = REPO_ROOT / "third_party/simtoolreal_rl_games"
@@ -540,8 +543,12 @@ def audit_root_ruff(repo_root: Path = REPO_ROOT) -> None:
 def audit_root_git_attributes(repo_root: Path = REPO_ROOT) -> None:
     _require_regular_file(repo_root / ".gitattributes", "Git whitespace attribute file")
     prefix = "third_party/simtoolreal_rl_games/rl_games/"
-    probes = (prefix + "torch_runner.py", "scripts/audit_simtoolreal_rlgames_vendor.py")
-    values = ("unset", "unspecified")
+    probes = (
+        prefix + "torch_runner.py",
+        "src/unilab/assets/robots/kuka_sharpa/LICENSE.kuka_iiwa",
+        "scripts/audit_simtoolreal_rlgames_vendor.py",
+    )
+    values = ("unset", "unset", "unspecified")
     command = ["git", "-c", "core.attributesFile=", "check-attr", "whitespace", "--", *probes]
     try:
         if (repo_root / ".gitattributes").read_bytes() != GIT_ATTRIBUTES_CONTENT:

@@ -225,12 +225,18 @@ def test_root_git_attributes_are_exact_and_scoped(tmp_path):
     vendor = isolated / "third_party/simtoolreal_rl_games/rl_games/vendor.py"
     vendor.parent.mkdir(parents=True)
     vendor.write_text("vendor = True \n")
+    license_file = isolated / "src/unilab/assets/robots/kuka_sharpa/LICENSE.kuka_iiwa"
+    license_file.parent.mkdir(parents=True)
+    license_file.write_text("license text \n")
     _git(isolated, "add", ".").check_returncode()
     assert _git(isolated, "diff", "--cached", "--check").returncode == 0
     (isolated / "ordinary.py").write_text("ordinary = True \n")
     _git(isolated, "add", "ordinary.py").check_returncode()
     result = _git(isolated, "diff", "--cached", "--check")
-    assert result.returncode and "ordinary.py" in result.stdout and "vendor.py" not in result.stdout
+    assert result.returncode
+    assert "ordinary.py" in result.stdout
+    assert "vendor.py" not in result.stdout
+    assert "LICENSE.kuka_iiwa" not in result.stdout
 
 
 def test_audit_root_git_attributes_rejects_crlf_similar_prefix_or_content_drift(tmp_path):

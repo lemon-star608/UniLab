@@ -28,6 +28,20 @@ def _write_completion_fixture(root: Path) -> None:
     (root / "scripts" / "benchmark" / "core" / "runner.py").write_text("", encoding="utf-8")
     (root / "scripts" / "play_viser.py").write_text("", encoding="utf-8")
     owner_files = {
+        root / "conf" / "rlgames_sapg" / "task" / "simtoolreal" / "mujoco.yaml": """
+training:
+  task_name: SimToolReal
+  sim_backend: mujoco
+algo:
+  algo_log_name: rlgames_sapg
+""",
+        root / "conf" / "rlgames_sapg" / "task" / "simtoolreal" / "mujoco_12k.yaml": """
+training:
+  task_name: SimToolReal
+  sim_backend: mujoco
+algo:
+  algo_log_name: rlgames_sapg
+""",
         root / "conf" / "ppo" / "task" / "go1" / "mujoco.yaml": """
 training:
   task_name: Go1
@@ -67,6 +81,7 @@ training:
         root / "logs" / "rsl_rl_ppo" / "Go2" / "2026-02-01_00-00-00_mujoco",
         root / "logs" / "hora_ppo" / "Go1" / "2026-03-01_00-00-00_mujoco",
         root / "custom_logs" / "Go3" / "2026-04-01_00-00-00_mujoco",
+        root / "logs" / "rlgames_sapg" / "SimToolReal" / "0_2026-08-21_00-00-00_mujoco",
     ]:
         path.mkdir(parents=True)
 
@@ -236,6 +251,51 @@ def test_train_profile_value_position_completes_profile_names(tmp_path: Path) ->
         10,
         metadata,
     ) == ["hora"]
+
+
+def test_rlgames_sapg_completion_discovers_owner_profile_and_runs(tmp_path: Path) -> None:
+    _write_completion_fixture(tmp_path)
+    metadata = build_metadata(tmp_path)
+    assert "rlgames_sapg" in metadata.choices["train"]["--algo"]
+    assert complete_words(
+        ["uv", "run", "train", "--algo", "rlgames_sapg", "--sim", "mujoco", "--task", ""],
+        8,
+        metadata,
+    ) == ["simtoolreal"]
+    assert complete_words(
+        [
+            "uv",
+            "run",
+            "train",
+            "--algo",
+            "rlgames_sapg",
+            "--task",
+            "simtoolreal",
+            "--sim",
+            "mujoco",
+            "--profile",
+            "",
+        ],
+        10,
+        metadata,
+    ) == ["12k"]
+    assert complete_words(
+        [
+            "uv",
+            "run",
+            "eval",
+            "--algo",
+            "rlgames_sapg",
+            "--task",
+            "simtoolreal",
+            "--sim",
+            "mujoco",
+            "--load-run",
+            "",
+        ],
+        10,
+        metadata,
+    ) == ["-1", "0_2026-08-21_00-00-00_mujoco"]
     assert complete_words(
         [
             "uv",

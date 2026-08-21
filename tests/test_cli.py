@@ -131,6 +131,48 @@ def test_train_profile_routes_to_owner_variant(tmp_path: Path) -> None:
     ]
 
 
+def test_rlgames_sapg_train_eval_and_12k_profile_route_to_dedicated_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "scripts").mkdir(parents=True)
+    (tmp_path / "scripts/train_rlgames_sapg.py").write_text("")
+    owner = tmp_path / "conf/rlgames_sapg/task/simtoolreal"
+    owner.mkdir(parents=True)
+    (owner / "mujoco.yaml").write_text("")
+    (owner / "mujoco_12k.yaml").write_text("")
+    monkeypatch.setattr(cli, "_check_runtime_requirements", lambda algo, sim: None)
+    train = cli.build_command(
+        mode="train",
+        algo="rlgames_sapg",
+        task="simtoolreal",
+        sim="mujoco",
+        profile="12k",
+        overrides=[],
+        root=tmp_path,
+    )
+    evaluate = cli.build_command(
+        mode="eval",
+        algo="rlgames_sapg",
+        task="simtoolreal",
+        sim="mujoco",
+        overrides=[],
+        load_run="-1",
+        render_mode="record",
+        root=tmp_path,
+    )
+    assert train[1:] == [
+        str(tmp_path / "scripts/train_rlgames_sapg.py"),
+        "task=simtoolreal/mujoco_12k",
+    ]
+    assert evaluate[1:] == [
+        str(tmp_path / "scripts/train_rlgames_sapg.py"),
+        "task=simtoolreal/mujoco",
+        "training.play_render_mode=record",
+        "training.play_only=true",
+        "algo.load_run=-1",
+    ]
+
+
 def test_go2_arm_manip_loco_motrix_train_and_eval_route_to_owner_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
