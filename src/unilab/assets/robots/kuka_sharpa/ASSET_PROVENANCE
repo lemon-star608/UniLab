@@ -685,7 +685,7 @@
       "donor_blob": "69629b71d1299c1463a200880ab124b6543d3202",
       "donor_path": "src/unilab/assets/robots/kuka_sharpa/scene.xml",
       "pristine_donor_sha256": "8b960a3d0e9a21b113496c33f52c29d4b990fe1d439645bc31c9a130715c8533",
-      "target_sha256": "d9c264e70df8c38415dca045a95f5fff70b3407cf930c0dd0b80e783c31ac606"
+      "target_sha256": "60e90d65daecd74416c10480a579a0aafe73a362abd185bf696919655829de69"
     }
   },
   "additional_assets": [

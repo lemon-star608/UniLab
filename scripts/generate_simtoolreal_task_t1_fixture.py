@@ -165,9 +165,9 @@ def generate(output: Path) -> None:
             "total_reward",
         ],
         "allowed_mapping": {
-            "physics_pool_nmesh": 19,
-            "complete_source_xml_nmesh": 40,
-            "note": "MuJoCo discardvisual=true physics contract is retained; source XML direct compile remains 40 meshes.",
+            "physics_pool_nmesh": 41,
+            "complete_source_xml_nmesh": 62,
+            "note": "Menagerie Sharpa collision migration retains 41 physics meshes and 62 source XML meshes.",
         },
         "arrays": _array_inventory(arrays),
         "discrete_exact_fields": [

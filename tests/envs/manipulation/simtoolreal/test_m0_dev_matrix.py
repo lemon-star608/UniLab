@@ -120,7 +120,7 @@ def test_real_mixed_layout_autoreset_affinity_combination(
             assert isinstance(resolved, list)
             for env_id in (0, 1, 7):
                 model = mujoco.MjModel.from_binary_path(resolved[env_id])
-                assert (model.nq, model.nv, model.nu, model.nmesh) == (36, 35, 29, 40)
+                assert (model.nq, model.nv, model.nu, model.nmesh) == (36, 35, 29, 62)
                 assert {
                     mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_MESH, mesh_id)
                     for mesh_id in range(model.nmesh)

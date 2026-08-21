@@ -17,6 +17,8 @@ def test_representative_shipped_scene_compiles_for_each_topology(tmp_path: Path)
     )
     representatives = {spec.topology: spec for spec in catalog}
     assert set(representatives) == {"box_box", "capsule_box", "box_only"}
+    source_model = mujoco.MjModel.from_xml_path(str(scene))
+    assert (source_model.nq, source_model.nv, source_model.nu, source_model.nmesh) == (29, 29, 29, 62)
     materialized = materialize_tool_scenes(
         str(scene), tuple(representatives.values()), temp_root=tmp_path
     )
