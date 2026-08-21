@@ -43,9 +43,11 @@ def test_pre_step_control_rejects_shape_mismatch() -> None:
 
 
 class _FakeMuJoCoPool:
-    def __init__(self) -> None:
+    def __init__(self, num_envs: int = 1) -> None:
         self.step_calls: list[dict] = []
         self.forward_calls: list[np.ndarray] = []
+        self.was_autoreset = np.zeros((num_envs,), dtype=bool)
+        self.step_autoreset_masks: list[np.ndarray] = []
 
     def step(
         self,
@@ -68,6 +70,8 @@ class _FakeMuJoCoPool:
                 "chunk_size": chunk_size,
             }
         )
+        if self.step_autoreset_masks:
+            self.was_autoreset[:] = self.step_autoreset_masks[len(self.step_calls) - 1]
         state_out = np.asarray(state) + 1.0
         if return_sensor:
             return state_out, state_out[:, :1]
@@ -79,7 +83,11 @@ class _FakeMuJoCoPool:
         return state_np[:, :1]
 
 
-def _fake_mujoco_backend(pre_step_control_fn=None, post_step_forward_sensor=False):
+def _fake_mujoco_backend(
+    pre_step_control_fn=None,
+    post_step_forward_sensor=False,
+    num_envs=1,
+):
     try:
         from unilab.base.backend.mujoco.backend import MuJoCoBackend
     except Exception as exc:
@@ -87,14 +95,15 @@ def _fake_mujoco_backend(pre_step_control_fn=None, post_step_forward_sensor=Fals
 
     backend = object.__new__(MuJoCoBackend)
     backend._pre_step_control_fn = pre_step_control_fn
-    backend._num_envs = 1
+    backend._num_envs = num_envs
     backend._np_dtype = np.float32
-    backend._physics_state = np.zeros((1, 1), dtype=np.float32)
-    backend._sensor_data = np.zeros((1, 1), dtype=np.float32)
-    backend._pending_xfrc_applied = np.zeros((1, 0), dtype=np.float64)
+    backend._physics_state = np.zeros((num_envs, 1), dtype=np.float32)
+    backend._sensor_data = np.zeros((num_envs, 1), dtype=np.float32)
+    backend._pending_xfrc_applied = np.zeros((num_envs, 0), dtype=np.float64)
+    backend._autoreset_mask = np.zeros((num_envs,), dtype=bool)
     backend._post_step_forward_sensor = post_step_forward_sensor
     backend._chunk_size = None
-    backend._pool = _FakeMuJoCoPool()
+    backend._pool = _FakeMuJoCoPool(num_envs)
     return backend
 
 
@@ -152,6 +161,33 @@ def test_mujoco_step_with_pre_step_control_recomputes_each_physics_step() -> Non
     np.testing.assert_allclose(backend._pool.step_calls[2]["control"], (ctrl + 3)[:, None, :])
     np.testing.assert_allclose(backend._physics_state, [[3.0]])
     np.testing.assert_allclose(backend._sensor_data, [[3.0]])
+
+
+def test_mujoco_pre_step_control_or_latches_substep_autoresets_and_clears() -> None:
+    backend = _fake_mujoco_backend(num_envs=3)
+    backend.set_pre_step_control(lambda _backend, ctrl: ctrl)
+    backend._pool.step_autoreset_masks = [
+        np.asarray([False, False, True]),
+        np.asarray([False, False, False]),
+        np.asarray([True, False, False]),
+        np.asarray([False, False, False]),
+    ]
+
+    backend.step(np.zeros((3, 0), dtype=np.float32), nsteps=4)
+
+    np.testing.assert_array_equal(
+        backend.get_step_autoreset_mask(),
+        np.asarray([True, False, True]),
+    )
+
+    backend._pool.step_autoreset_masks = [np.asarray([False, False, False])]
+    backend._pool.step_calls.clear()
+    backend.step(np.zeros((3, 0), dtype=np.float32), nsteps=1)
+
+    np.testing.assert_array_equal(
+        backend.get_step_autoreset_mask(),
+        np.asarray([False, False, False]),
+    )
 
 
 class _FakeMotrixModel:

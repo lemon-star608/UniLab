@@ -28,6 +28,8 @@ EXPECTED_SUPPORTED_FIELDS = {
     "body_inertia",
     "dof_armature",
     "geom_friction",
+    "geom_size",
+    "geom_pos",
     "kp",
     "kd",
 }

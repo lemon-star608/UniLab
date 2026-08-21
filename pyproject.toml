@@ -53,7 +53,7 @@ mujoco = [
     # (uv prefer-locked semantics). The tested window is >=3.5,<3.11 — switch
     # within it via `make mujoco MJ=<version>`.
     "mujoco>=3.5",
-    "mujoco-uni-runtime==0.3.1",
+    "mujoco-uni-runtime==0.4.0.dev0",
     # pybind11/wheel are build requirements of mujoco-uni-runtime, which is
     # compiled in this environment (see no-build-isolation-package below).
     "pybind11>=2.12",
@@ -87,6 +87,7 @@ url = "https://download-r2.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.uv.sources]
+mujoco-uni-runtime = { git = "https://github.com/lemon-star608/mujoco_uni.git", rev = "7205e070e983df90d520f0f8593853013e976746" }
 torch = [
     { index = "r2-cu130", marker = "sys_platform=='linux' and platform_machine=='aarch64'" },
     { index = "pytorch-cu128", marker = "sys_platform=='linux' and platform_machine=='x86_64'" },
