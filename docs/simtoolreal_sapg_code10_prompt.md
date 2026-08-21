@@ -149,8 +149,8 @@ docs/sphinx/source/en/5-reference/5-support_matrix.md
 本 prompt 的父 docs baseline 是：
 
 ~~~text
-afaf0da276c7b4a5fe67b80c1691b7a5754a0d3f
-docs: plan SAPG Code 10 support promotion
+e007c3c036e14a464acef470a099a178ee4cf4c8
+docs: align SAPG Code 10 with rebased M0-dev runtime
 ~~~
 
 开始时运行以下只读检查。预期本次改口径 commit 是该 baseline 的一个直接 docs-only
@@ -159,7 +159,7 @@ child；若条件不成立，返回 # BLOCKED，不要清理或覆盖现有改�
 ~~~bash
 set -e
 set -o pipefail
-CODE10_BASE=afaf0da276c7b4a5fe67b80c1691b7a5754a0d3f
+CODE10_BASE=e007c3c036e14a464acef470a099a178ee4cf4c8
 test "$(git rev-parse --abbrev-ref HEAD)" = "feat/simtoolreal-sapg-rlgames"
 git merge-base --is-ancestor "$CODE10_BASE" HEAD
 test "$(git rev-list --count "$CODE10_BASE"..HEAD)" -eq 1
@@ -462,9 +462,12 @@ CLI task slug 是 `simtoolreal`，runtime `training.task_name` 仍是 `SimToolRe
 基础 owner 时使用 `+env.cpu_ids=null`。第二次使用独立 root 重复 S1 train/play；不要求两次
 physics trajectory bit-exact。
 
-S1 必须证明 epoch/frame 超过 Code #9 单 epoch基线；checkpoint 的 actor/central optimizer、
-RMS/RNN state 非空且 `env_state=None`；每次最终只有 train/eval 两个 run directories，MP4
-非空，native scratch、materialized roots、writer、renderer 和 GPU process 均清理。
+S1 必须证明 epoch/frame 超过 Code #9 单 epoch基线。checkpoint 验收遵循 Code #9/native
+schema：actor `optimizer` 的 state 非空；actor model、central model (`assymetric_vf_nets`)
+及其各自 RMS/normalizer fields 非空；`rnn_states` 非空且 `env_state=None`。原生 schema 不
+落盘 central optimizer state，因此不得要求或伪造该字段。每次最终只有 train/eval 两个
+run directories，MP4 非空，native scratch、materialized roots、writer、renderer 和 GPU
+process 均清理。
 
 ### 6.2 真实 12288/2048/6 profile
 
@@ -493,9 +496,10 @@ UNILAB_REQUIRE_SAPG=1 uv run --extra mujoco --extra rlgames-sapg train \
   +env.cpu_ids=null
 ~~~
 
-检查真实 profile、checkpoint、非空 optimizer/RMS/RNN state、`env_state=None`、run metadata、
-pool/native scratch 和显存/进程 cleanup。不得用 S1 overrides 或缩小 block size 代替；OOM、
-native crash、missing CUDA 或 checkpoint 不完整均为 blocker。
+检查真实 profile、checkpoint、actor optimizer state、actor/central model 与 RMS/normalizer
+state、RNN state、`env_state=None`、run metadata、pool/native scratch 和显存/进程 cleanup。
+central optimizer state 不属于 native checkpoint contract。不得用 S1 overrides 或缩小 block
+size 代替；OOM、native crash、missing CUDA 或 native schema 中已有字段缺失均为 blocker。
 
 ## 7. Child 10C：mixed-layout/autoreset/affinity 组合近风险
 

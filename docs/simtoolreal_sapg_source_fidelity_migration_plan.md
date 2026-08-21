@@ -8,7 +8,7 @@
 
 当前分支：feat/simtoolreal-sapg-rlgames
 
-本次整理基线：afaf0da276c7b4a5fe67b80c1691b7a5754a0d3f
+本次整理基线：e007c3c036e14a464acef470a099a178ee4cf4c8
 
 ## 1. 普通中文路线摘要
 
@@ -134,7 +134,8 @@ Code #9 提交后的已记录验证：
   37 passed，72+7 audit 通过；Code #8：101 passed；邻近 backend：52 passed、7 deselected、
   5 条既有 XML/Gymnasium warnings；
 - 真实 CLI train/eval 产生 101,989,547-byte native checkpoint 和 45,351-byte MP4；checkpoint
-  为 outer rank 0、epoch 1、frame 24、非空 actor/central optimizer state、`env_state=None`；
+  为 outer rank 0、epoch 1、frame 24、非空 actor optimizer、actor/central model 与 RMS/RNN
+  state、`env_state=None`；native schema 不保存 central optimizer state；
 - Ruff、format check、`uv lock --check` 通过，mypy 对 252 个 source files 无错误，pyright 为
   0 errors 和 3 个既有 optional Motrix import warnings；cold-path/private/source-access、
   single-W&B、no-second-loop 和 cleanup audit 通过；
