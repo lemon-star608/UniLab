@@ -24,7 +24,7 @@ Code 1-5  固定并验证 Source SAPG runtime                 已完成
 Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
 Code 8    组合真实 MuJoCo env，完成 T1                     已完成
-Code 9    接 native Runner、adapter、tracker、pth 和 CLI    未开始
+Code 9    接 native Runner、adapter、tracker、pth 和 CLI    已规划，待实现
 Code 10   真实 smoke、正式依赖和 support promotion         未开始
 ~~~
 
@@ -48,7 +48,7 @@ support 五个不同风险边界。
 | 6 | MuJoCo backend public contracts | 31583cae7a4084258d28e330ed301c8dc4240c38 | 已完成 |
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
 | 8 | 真实 MuJoCo env composition、T1 | cc9a4fdea72b40716a861611cbca0fac874c7ce4 | 已完成 |
-| 9 | Source RL-Games SAPG production path | — | 未开始 |
+| 9 | Source RL-Games SAPG production path | — | 已规划，待实现 |
 | 10 | release、dependency lock、support promotion | — | 未开始 |
 
 Code #5 提交后的已记录验证：
@@ -176,7 +176,7 @@ Hydra SAPG owner
 
 固定 Source identity：
 
-- Source HEAD：2a9917533bfea70419ed2667a511d7238e5b3abc；
+- Source reference commit：2a9917533bfea70419ed2667a511d7238e5b3abc；
 - RL-Games parent tree：7a6a0bb090998d00565aaefa6ab9f2b3d356ace2；
 - train owner：isaacsimenvs/cfg/train/SimToolRealSAPG.yaml；
 - train owner blob：f363d05d4a24b190b7837703b93270d8f3fe9a9c；
@@ -595,10 +595,17 @@ registry/construction、8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset i
 
 ### Code #9：Source RL-Games SAPG production path
 
+状态：已规划，待实现。执行 prompt 为
+`docs/simtoolreal_sapg_code9_prompt.md`；该 prompt 已把本 Code 拆为 9A-9D，并固定 dependency、
+config、adapter/Runner、tracker/checkpoint、native player/CLI 和真实 vertical slice 的顺序与
+停止条件。
+
 唯一主要结果：建立一个可 train、resume、weights-load 和 play 的 native vertical slice。
 
 只做：
 
+- 修正Code #7增加KUKA license whitespace attribute后，既有vendor audit仍锁旧单行内容的
+  compatibility drift；不修改`.gitattributes`或vendor bytes；
 - root sapg optional extra 和 pinned vendor dependency；
 - 独立 conf/rlgames_sapg owner group；
 - RlGamesNpEnvAdapter；
@@ -609,7 +616,9 @@ registry/construction、8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset i
 - CLI train/eval route；
 - fake env ABI、config、Runner、tracker、checkpoint、player 和真实 smoke tests；
 - player/video 必须验证每个 env 的 assigned-tool visual mapping；Code #8 只锁定了 19-mesh
-  physics variant，不能把它当作完整 40-mesh visual playback 已经成立的证据。
+  physics variant，不能把它当作完整 40-mesh visual playback 已经成立的证据；已知现有
+  size-only materializer会让capsule_box/box_only复用tool 0 topology，9D在既有MuJoCo cold-path
+  playback helper内做generic topology同步，不新增backend public contract，也不改env/T1。
 
 不做：
 
@@ -620,9 +629,12 @@ registry/construction、8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset i
 - async/distributed/export；
 - 反向修改 vendor 或 rebaseline Code #1-#5。
 
-预计规模：约 25 paths、3-4k 手写 LOC 加 generated lock。
+预计规模：约 32 paths、3-4k production/test LOC 加 generated lock；每个 child 约 15 paths
+以内、约 800 行以内净手写 adaptation，并在进入下一 child 前独立 GREEN。
 
-永久成本：约 7 个 integration modules、独立 Hydra/CLI、pth resolver 和 player path。
+永久成本：8 个以内职责单一的 integration modules、3 个 Hydra owners、一个薄 training
+script、独立 CLI route、pth resolver、native player path 和一个既有cold-path visual helper
+的topology regression。
 
 ### Code #10：release 和 support promotion
 
