@@ -132,10 +132,10 @@ def test_registered_env_compiles_complete_600_tool_pool(real_env: Any) -> None:
     topology = Counter()
     for spec, model in zip(env._tool_catalog, models, strict=True):
         topology[spec.topology] += 1
-        # The complete source XML has 40 meshes.  The real physics pool keeps
+        # The complete source XML has 62 meshes.  The real physics pool keeps
         # the established backend ``discardvisual=true`` contract, so its
-        # compiled variants intentionally contain only the 19 collision meshes.
-        assert (model.nq, model.nv, model.nu, model.nmesh) == (36, 35, 29, 19)
+        # compiled variants contain the 41 collision meshes (8 arm + 33 hand).
+        assert (model.nq, model.nv, model.nu, model.nmesh) == (36, 35, 29, 41)
         object_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
         assert object_body_id >= 0
         np.testing.assert_allclose(model.body_mass[object_body_id], spec.mass, rtol=1e-5, atol=1e-7)
