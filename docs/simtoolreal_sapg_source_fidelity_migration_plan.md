@@ -16,14 +16,14 @@
 原生 RL-Games SAPG 训练和播放，而不是继续维护 UniLab 中不完全等价的 RSL-RL SAPG
 仿写。
 
-当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产和 backend-neutral
-task foundations 已经完成，真实 UniLab env/training pipeline 尚未接通：
+当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产、task foundations
+和真实 MuJoCo env 已经完成；native RL-Games training pipeline 尚未接通：
 
 ~~~text
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
 Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
-Code 8    组合真实 MuJoCo env，完成 T1                     已规划，待实现
+Code 8    组合真实 MuJoCo env，完成 T1                     已完成
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    未开始
 Code 10   真实 smoke、正式依赖和 support promotion         未开始
 ~~~
@@ -47,7 +47,7 @@ support 五个不同风险边界。
 | 5 | checkpoint、resume boundary、player oracle | 6e1087f62cd17d196d67ccbd4ea880d0341cf6b5 | 已完成 |
 | 6 | MuJoCo backend public contracts | 31583cae7a4084258d28e330ed301c8dc4240c38 | 已完成 |
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
-| 8 | 真实 MuJoCo env composition、T1 | — | 已规划，待实现 |
+| 8 | 真实 MuJoCo env composition、T1 | cc9a4fdea72b40716a861611cbca0fac874c7ce4 | 已完成 |
 | 9 | Source RL-Games SAPG production path | — | 未开始 |
 | 10 | release、dependency lock、support promotion | — | 未开始 |
 
@@ -88,9 +88,29 @@ Code #7 提交后的已记录验证：
 - `git diff --check` 通过，根目录没有 `MUJOCO_LOG.TXT`；没有运行 `make test-all`，没有进入
   Code #8。
 
-以上证据只证明已接受的算法/runtime 回归边界。当前仍然没有：
+Code #8 提交后的已记录验证：
 
-- 真实 SimToolReal MuJoCo env；
+- 代码 commit：cc9a4fdea72b40716a861611cbca0fac874c7ce4；
+- clean registry bootstrap、唯一 MuJoCo owner 和
+  `registry.make("SimToolReal", sim_backend="mujoco", num_envs=6)` 真实构造通过；
+- focused task/env/T0/T1 gate：101 passed、0 skipped；Code #6 邻近 backend gate：37 passed；
+- 600 个 materialized source XML、600 个 physics variants、fixed assignments 和
+  box_box/capsule_box/box_only=`250/300/50` census 通过；完整 source XML 为
+  `nq/nv/nu/nmesh=36/35/29/40`，既有 `discardvisual=true` physics pool 为
+  `36/35/29/19`；
+- 真实 reset/partial reset、64 steps、raw reward、success、timeout/final observation、public
+  wrench handoff、engine autoreset exact-row/latch/cleanup 和 construction-failure cleanup 通过；
+- T1 独立 regeneration 的 NPZ 和 manifest 均逐字节一致；NPZ/manifest SHA256 分别为
+  `228b704e0a5b8e94269ce4b4da29cff4e51bb57338390d79453fe0d921cfb760` 和
+  `6b87220134e2711939bad47d8ae64c0fa8820e5731b887c751d7646a061a5fdb`；
+- `uv lock --check`、Ruff、format check 通过，mypy 对 244 个 source files 无错误，pyright
+  为 0 errors 和 3 个既有 optional Motrix import warnings；
+- cold-path/backend-private/source-access audit 和 `git diff --check` 通过，根目录没有
+  `MUJOCO_LOG.TXT`；没有修改 backend、Source、vendor、MuJoCoUni、dependency 或 conf，
+  没有运行 `make test-all`，没有进入 Code #9。
+
+以上证据证明已接受的算法/runtime、backend、task 和真实 env 回归边界。当前仍然没有：
+
 - production RlGamesNpEnvAdapter；
 - production Hydra SAPG owner；
 - native Runner train/play 入口；
@@ -537,31 +557,39 @@ license 原始 CRLF/尾空格 bytes 时不误报 whitespace；license blob 仍�
 
 ### Code #8：真实 MuJoCo env composition 和 T1
 
-状态：已完成 execution prompt 规划，尚未开始实现。批准范围拆为 8A registry/construction、
-8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset integration、8D Target-only T1；执行边界
-见 `docs/simtoolreal_sapg_code8_prompt.md`。T1 不访问 Source checkout，不做跨 simulator
-轨迹对拍。
+状态：已完成。代码 commit 为 cc9a4fdea72b40716a861611cbca0fac874c7ce4。8A
+registry/construction、8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset integration 和
+8D Target-only T1 均已落地；T1 不访问 Source checkout，也不做跨 simulator 轨迹对拍。
 
 唯一主要结果：组合、注册真实 SimToolReal MuJoCo env，并锁定 NpEnv contract。
 
-只做：
+实际 scope 为 12 paths、1702 insertions、6 deletions。`env.py` 是固定 donor blob 的机械移植
+和当前 Target contract 适配，最终 793 行；没有修改 Code #7 task formulas。
 
-- env.py、registry 和 composition；
-- 真实 600-tool pool；
-- source model variants；
-- reset/step/action/obs/reward/termination/timeout/info；
-- autoreset、wrench 和 episode lifecycle；
-- T1 integration oracle；
-- cold-path asset access 和无 backend-private leakage。
+已完成的 contract 和证据：
 
-不做：
+- `SimToolRealCfg` 和 `SimToolRealEnv` 分别注册 config/mujoco env owner，clean bootstrap 后没有
+  第二个 backend owner；
+- action/actor/critic/episode contract 固定为 `29/140/162/600`，真实 scene 为
+  `nq/nv/nu=36/35/29`；
+- deterministic catalog、600 complete XML、600 compiled physics variants 和 fixed env
+  assignments 均进入真实 MuJoCo runtime；完整 XML 的 40 meshes 与 physics pool 的 19 meshes
+  是 manifest 中显式记录的 `discardvisual=true` mapping，不是资产缺失；
+- NpEnv reset/step、partial-row scatter、raw reward、success、timeout、terminal observation、
+  public body wrench 和 engine-autoreset lifecycle 已由 real N=6 integration 锁定；
+- close、重复 close 和 construction failure 均清理 materialized tool temp root，divergence
+  warning 被限制在 pytest tmp path；
+- T1 固定 N=6、H=8、seed=20260821、50 arrays 和 13 个 exact discrete fields；普通 replay
+  校验 fixture 外层 hashes、当前 production hashes、runtime identity、array inventory 和真实
+  capture；
+- required focused gate 为 101 passed、0 skipped；T1 deterministic cmp、Code #6 邻近 gate、
+  Ruff/format/mypy/pyright/lock 均通过。
+
+明确仍未做：
 
 - native Runner、tracker、pth 或 CLI；
 - IsaacSim/MuJoCo 轨迹 bit-exact；
 - support promotion。
-
-预计规模：env、registration、composition/T1 tests，约 2k donor/test LOC，手写 adaptation
-约 200 行。
 
 永久成本：真实 task/env owner、registry 和 T1 regression。
 
@@ -579,7 +607,9 @@ license 原始 CRLF/尾空格 bytes 时不误报 whitespace；license blob 仍�
 - pth resolver 和 resume/weights modes；
 - PpoPlayerContinuous；
 - CLI train/eval route；
-- fake env ABI、config、Runner、tracker、checkpoint、player 和真实 smoke tests。
+- fake env ABI、config、Runner、tracker、checkpoint、player 和真实 smoke tests；
+- player/video 必须验证每个 env 的 assigned-tool visual mapping；Code #8 只锁定了 19-mesh
+  physics variant，不能把它当作完整 40-mesh visual playback 已经成立的证据。
 
 不做：
 
@@ -645,8 +675,8 @@ fixture 必须同时保存公式所需 primitive inputs，不能只存无法解�
 
 ### 10.2 T1：real env integration oracle
 
-T1 在 Code #8 使用同一组 task primitives，验证它们接入真实 MuJoCo env、backend、
-600-tool pool 和 NpEnv lifecycle 后仍保持 task contract。
+T1 已在 Code #8 完成。它使用同一组 task primitives，验证它们接入真实 MuJoCo env、
+backend、600-tool pool 和 NpEnv lifecycle 后仍保持 task contract。
 
 T1 验证：
 
@@ -658,6 +688,20 @@ T1 验证：
 
 离散 mask/index 必须 exact；浮点 task math 使用已批准 tolerance。只允许 manifest 中的
 backend、table、tool 和 resource mapping 差异。T0 未通过时不得开始 T1。
+
+固定 capture 为 N=6、H=8、CPU FP32、seed=20260821，通过 registry composition 创建真实
+env；事件依次为 init、4 steps、rows `[1,4]` selected reset、3 steps、row 2 exact timeout。
+fixture 包含 50 arrays 和 13 个 exact discrete fields，普通 pytest 不运行 generator、不访问
+Source/donor。完整 source XML 的 `nmesh=40` 与 physics pool 的 `nmesh=19` 在 manifest 中显式
+区分。最终 hashes：
+
+~~~text
+target_t1_fp32.npz
+228b704e0a5b8e94269ce4b4da29cff4e51bb57338390d79453fe0d921cfb760
+
+target_t1_manifest.json
+6b87220134e2711939bad47d8ae64c0fa8820e5731b887c751d7646a061a5fdb
+~~~
 
 ## 11. Production adapter、config、checkpoint 和 play
 
