@@ -16,13 +16,13 @@
 原生 RL-Games SAPG 训练和播放，而不是继续维护 UniLab 中不完全等价的 RSL-RL SAPG
 仿写。
 
-当前算法迁移、算法回归基线和 MuJoCo backend public contracts 已经完成，真实 UniLab
-task/env/training pipeline 尚未接通：
+当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产和 backend-neutral
+task foundations 已经完成，真实 UniLab env/training pipeline 尚未接通：
 
 ~~~text
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
 Code 6    补齐 MuJoCo backend public contracts            已完成
-Code 7    迁移 assets 和 task primitives，完成 T0          未开始
+Code 7    迁移 assets 和 task primitives，完成 T0          已完成
 Code 8    组合真实 MuJoCo env，完成 T1                     未开始
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    未开始
 Code 10   真实 smoke、正式依赖和 support promotion         未开始
@@ -46,7 +46,7 @@ support 五个不同风险边界。
 | 4 | update、AMP、optimizer、GradScaler oracle | 2e1c7874d4a550a63834325b6a9a8b078304ba6a | 已完成 |
 | 5 | checkpoint、resume boundary、player oracle | 6e1087f62cd17d196d67ccbd4ea880d0341cf6b5 | 已完成 |
 | 6 | MuJoCo backend public contracts | 31583cae7a4084258d28e330ed301c8dc4240c38 | 已完成 |
-| 7 | assets、task foundations、T0 | — | 未开始 |
+| 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
 | 8 | 真实 MuJoCo env composition、T1 | — | 未开始 |
 | 9 | Source RL-Games SAPG production path | — | 未开始 |
 | 10 | release、dependency lock、support promotion | — | 未开始 |
@@ -74,6 +74,19 @@ Code #6 提交后的已记录验证：
   3 个既有 optional Motrix import warnings；
 - `uv lock --check`、`git diff --check` 和 post-commit focused rerun 通过；
 - 根目录没有 `MUJOCO_LOG.TXT`；没有运行 `make test-all`，没有进入 Code #7。
+
+Code #7 提交后的已记录验证：
+
+- 代码 commit：af5c3401cecf280fc641f48e9c3ae4a134260ac7；
+- focused task/T0 gate：90 passed、0 skipped、0 warnings；Code #6 邻近 source-model gate：
+  3 passed；
+- T0 独立 regeneration 的 NPZ 和 manifest 均逐字节一致；
+- Ruff 和 format check 通过，mypy 对 243 个 source files 无错误，pyright 为 0 errors 和
+  3 个既有 optional Motrix import warnings；
+- 40-mesh closure、license/provenance、XML/代表 tool compile、cold-path 和 backend capability
+  audit 通过；post-code-commit focused rerun 仍为 90 passed；
+- `git diff --check` 通过，根目录没有 `MUJOCO_LOG.TXT`；没有运行 `make test-all`，没有进入
+  Code #8。
 
 以上证据只证明已接受的算法/runtime 回归边界。当前仍然没有：
 
@@ -384,6 +397,8 @@ Code #5 使用 6 actors、block size 1、MLP [32,32,16,16] 和 RNN 16 的小型 
 | source_update_manifest.json | 748be517553df7689ee4a06991241e37fc205336f6a5638f2bdd168735d57e45 |
 | source_checkpoint.pth | bbe577dc7efed068bb38ce6f268e849de6a41e8ab6bb4a78fabeed9b0d7b5e02 |
 | source_checkpoint_manifest.json | 8d55469d09095827587d502758d477913c76f13e8e9cd0baa23cb142d518c946 |
+| source_t0_fp32.npz | 5393583ed7a424910b24622867785e6d6431e29570da997a8064f654ec70624d |
+| source_t0_manifest.json | d90453bec0db06046aa832615f52c9b8499bee735dc62b4ed9d0d7f107e387b6 |
 
 Manifests 内另有 canonical payload、Source owner、loaded module 和 platform hashes；上表是
 Git 工作树文件的外层 anchor。
@@ -452,6 +467,14 @@ feat(backend): add SimToolReal MuJoCo runtime contracts
 唯一主要结果：把成熟 SimToolReal 资源和 backend-neutral task math 放入 target，并得到
 可解释的 Source T0 oracle。
 
+状态与代码提交：
+
+~~~text
+已完成
+af5c3401cecf280fc641f48e9c3ae4a134260ac7
+feat(simtoolreal): add task foundations and Source T0
+~~~
+
 只做：
 
 - 40 个由生产训练 XML 实际引用的 mesh、2 个生产 XML；其中 16 个 KUKA
@@ -475,7 +498,42 @@ feat(backend): add SimToolReal MuJoCo runtime contracts
 预计规模：机械迁移 40 meshes、2 XML、约 7-8k donor LOC；手写 provenance/adaptation
 约 650-1000 行。
 
-永久成本：约 15 个 task modules、assets/licenses 和一个 T0 golden。
+永久成本：14 个 package/task modules、assets/licenses 和一个 T0 golden。
+
+实际 scope 为 78 paths、8890 insertions：原计划的 77 个 asset/task/test/fixture paths，加
+根 `.gitattributes` 的 1 条精确 license whitespace rule。该规则只让 Git 在保留固定 BSD
+license 原始 CRLF/尾空格 bytes 时不误报 whitespace；license blob 仍为
+`46670489513480eff80b81e3ec780abf29e347bd`。
+
+已完成的 contract 和证据：
+
+- 生产 XML 的闭包恰好是 40 meshes：16 个 KUKA collision/visual 和 24 个 Sharpa hand；
+  `left_hand_C_MC_visual_.STL` 与注释候选 `left_thumb_MC_modified.STL` 没有迁移；
+- robot XML 真实编译为 `nq/nv/nu/nmesh=29/29/29/40`，box_box、capsule_box、box_only
+  代表 scene 均真实编译为 `36/35/29/40`；keyframe 只在 task-level scene XML；
+- 特殊 `left_hand_C_MC_visual.STL` 是 Source 5964-triangle ASCII STL 到 donor binary STL 的
+  deterministic、geometry-preserving adaptation，不是另一套几何；Source/target 分别为
+  1254651/298284 bytes，target SHA256 为
+  `2104aad51f03537a3458e3afcf5f5c7532b8a3ef0abba08b4425b3bd31e4f55f`；
+- `ASSET_PROVENANCE` schema 1 固定 Source/donor/XML/license/40-mesh inventory、39 identical
+  + 1 adaptation 和排除清单；外层 SHA256 为
+  `ad12eeec35d7e33e8f4a00011aaa56a56b04acaf87af45c84697b3e9b94b4b42`；
+- package 在没有 env.py/registry owner 时可导入；config 固定 action 29、actor 140、critic 162、
+  600 steps，env/raw reward 保持 200/20/300/50/1000/0.03/0.003，只有 critic reward feature
+  乘 0.01；
+- deterministic catalog 为 12 distributions × 50 = 600，topology census 为
+  box_box=250、capsule_box=300、box_only=50；Source-native 12×1 representative URDF 与
+  Target ToolSpec 的 geometry、mass、COM、diagonal inertia 和 object scale 已比较；
+- focused tests 覆盖 non-identity canonical/backend permutation、delay、goal/keypoint、
+  observation、raw reward/lifecycle、full SO(3) reset、fixed table mapping 和 wrench DR；
+- T0 固定 N=6、CPU FP32、8 个 Source-native modules、74 arrays 和 17 个 exact discrete
+  fields，覆盖 non-identity permutation、delay/noise、goal/keypoint、raw reward trackers、
+  termination/reset、wrench 及 tool distribution/ToolSpec；NPZ/manifest SHA256 见第 8 节；
+- focused gate 为 90 passed，Code #6 邻近 gate 为 3 passed；独立 regeneration 两个 cmp
+  通过，Ruff/format/mypy/pyright 通过；
+- production 中仅 `tool_assets.py` materialization 和 `dr_provider.py` trajectory-cache 两个
+  冷路径读取 XML/metadata；没有 env.py、registry import、backend `getattr/hasattr` probe、
+  Source/donor/vendor/MuJoCoUni 修改，也没有进入 Code #8。
 
 ### Code #8：真实 MuJoCo env composition 和 T1
 
@@ -559,10 +617,11 @@ T0 在 Code #7 完成，不依赖真实 MuJoCo trajectory。
 固定 Source generator 构造并保存：
 
 - joint、object、tool state；
-- action 和 delay history；
+- action、delay history 和固定 non-identity canonical/backend permutation；
 - goal 和 episode counters；
 - 显式 random draws；
-- 必要的命名 simulator-query inputs，例如接触力。
+- 必要的命名 simulator-query inputs，例如 body pose/velocity 和 fingertip distance；
+- 12 个 Source-native distribution representative URDF 的 geometry/mass metadata。
 
 Source 原生 task math 产生：
 
@@ -572,6 +631,7 @@ Source 原生 task math 产生：
 - 每个 reward term 和 raw total；
 - termination/reset mask；
 - DR parameters；
+- 代表 ToolSpec 的 geometry、mass、COM、inertia 和 scale；
 - 字段顺序、单位和 dtype。
 
 fixture 必须同时保存公式所需 primitive inputs，不能只存无法解释的最终 tensor。T0 的
