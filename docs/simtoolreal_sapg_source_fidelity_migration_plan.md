@@ -23,7 +23,7 @@ task foundations 已经完成，真实 UniLab env/training pipeline 尚未接通
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
 Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
-Code 8    组合真实 MuJoCo env，完成 T1                     未开始
+Code 8    组合真实 MuJoCo env，完成 T1                     已规划，待实现
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    未开始
 Code 10   真实 smoke、正式依赖和 support promotion         未开始
 ~~~
@@ -47,7 +47,7 @@ support 五个不同风险边界。
 | 5 | checkpoint、resume boundary、player oracle | 6e1087f62cd17d196d67ccbd4ea880d0341cf6b5 | 已完成 |
 | 6 | MuJoCo backend public contracts | 31583cae7a4084258d28e330ed301c8dc4240c38 | 已完成 |
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
-| 8 | 真实 MuJoCo env composition、T1 | — | 未开始 |
+| 8 | 真实 MuJoCo env composition、T1 | — | 已规划，待实现 |
 | 9 | Source RL-Games SAPG production path | — | 未开始 |
 | 10 | release、dependency lock、support promotion | — | 未开始 |
 
@@ -536,6 +536,11 @@ license 原始 CRLF/尾空格 bytes 时不误报 whitespace；license blob 仍�
   Source/donor/vendor/MuJoCoUni 修改，也没有进入 Code #8。
 
 ### Code #8：真实 MuJoCo env composition 和 T1
+
+状态：已完成 execution prompt 规划，尚未开始实现。批准范围拆为 8A registry/construction、
+8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset integration、8D Target-only T1；执行边界
+见 `docs/simtoolreal_sapg_code8_prompt.md`。T1 不访问 Source checkout，不做跨 simulator
+轨迹对拍。
 
 唯一主要结果：组合、注册真实 SimToolReal MuJoCo env，并锁定 NpEnv contract。
 
