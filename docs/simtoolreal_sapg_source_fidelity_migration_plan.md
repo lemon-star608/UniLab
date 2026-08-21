@@ -8,7 +8,7 @@
 
 当前分支：feat/simtoolreal-sapg-rlgames
 
-本次整理前基线：6e1087f62cd17d196d67ccbd4ea880d0341cf6b5
+本次整理基线：afaf0da276c7b4a5fe67b80c1691b7a5754a0d3f
 
 ## 1. 普通中文路线摘要
 
@@ -17,8 +17,8 @@
 仿写。
 
 当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产、task foundations、
-真实 MuJoCo env 和 native RL-Games production vertical slice 已经完成；正式依赖和 support
-promotion 尚未开始：
+真实 MuJoCo env 和 native RL-Games production vertical slice 已经完成；Code #10 的
+M0-dev provisional 验证尚未开始，正式 release/support promotion 仍延期：
 
 ~~~text
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
@@ -26,7 +26,7 @@ Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
 Code 8    组合真实 MuJoCo env，完成 T1                     已完成
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    已完成
-Code 10   真实 smoke、正式依赖和 support promotion         已规划，待实现
+Code 10   M0-dev smoke、依赖重 pin 和 provisional gates       已规划，待实现
 ~~~
 
 后续不要求 IsaacSim/PhysX 与 MuJoCo 的真实轨迹、随机数、接触状态、reward curve 或训练
@@ -50,7 +50,7 @@ support 五个不同风险边界。
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
 | 8 | 真实 MuJoCo env composition、T1 | cc9a4fdea72b40716a861611cbca0fac874c7ce4 | 已完成 |
 | 9 | Source RL-Games SAPG production path | af01194e1074c9c6bc0938a66352198d5a36c12f | 已完成 |
-| 10 | release、dependency lock、support promotion | — | 已规划，待实现 |
+| 10 | M0-dev candidate、dependency lock、provisional gates | — | 已规划，待实现 |
 
 Code #5 提交后的已记录验证：
 
@@ -146,9 +146,12 @@ Code #9 提交后的已记录验证：
 `docs/simtoolreal_sapg_code10_prompt.md`，但 Code #10 尚未开始。当前仍然没有：
 
 - 持续 M0-dev S1 和真实 `12288/2048` profile 证据；
-- clean-install M0-release artifact 和正式 dependency promotion；
-- mixed-layout、autoreset、CPU affinity 的 release 组合回归；
+- Target 指向 rebased M0-dev SHA 的 dependency/lock 和安装态审计；
+- mixed-layout、autoreset、CPU affinity 的 M0-dev 组合回归；
 - `make test-all`、final-current-head CI 和 maintainer support judgment。
+
+正式 0.4.0 artifact、clean-install promotion 和正式 support wording 明确延期，不是当前
+M0-dev candidate 的前置条件。
 
 ## 3. 目标、owner 和非目标
 
@@ -506,11 +509,13 @@ feat(backend): add SimToolReal MuJoCo runtime contracts
   clear；
 - production 热路径没有 `getattr/hasattr` capability probe，也不读取 XML 或 asset metadata。
 
-依赖固定为 `mujoco-uni-runtime==0.4.0.dev0`，Git URL 是
-`https://github.com/lemon-star608/mujoco_uni.git`，source/lock/安装态 commit 都是
-`7205e070e983df90d520f0f8593853013e976746`。本批没有使用 sibling checkout 或 artifact，
-没有修改 MuJoCoUni owner 仓库。M0-dev 仍没有 `cpu_ids/worker_cpu_ids` ABI；CPU affinity
-和正式 dependency promotion 继续属于 Code #10，Code #6 不构成正式 support 声明。
+依赖当时固定为 `mujoco-uni-runtime==0.4.0.dev0`，Git URL 是
+`https://github.com/lemon-star608/mujoco_uni.git`，source/lock/安装态 commit 是
+`7205e070e983df90d520f0f8593853013e976746`。该 SHA 是 Code #6 的历史开发 pin，随后因
+MuJoCoUni rebase 被 `54a2197be5b0cd65e9d71ff884d8415191925136` supersede；本批没有使用
+sibling checkout 或 artifact，也没有修改 MuJoCoUni owner 仓库。Code #6 当时仍没有
+`cpu_ids/worker_cpu_ids` ABI；CPU affinity 和新 pin 继续属于 Code #10，Code #6 不构成正式
+support 声明。
 
 ### Code #7：assets、task foundations 和 T0
 
@@ -679,39 +684,43 @@ Phase 0 用 `uv run --with-editable` 临时加载 vendor 时，overlay 会独立
 - RSL-RL checkpoint schema conversion；
 - async/distributed/export；
 - 反向修改 vendor 或 rebaseline Code #1-#5。
-- 持续 S1、真实运行 12k profile、M0-release、完整 suite、CI 或 support promotion。
+- 持续 S1、真实运行 12k profile、M0-dev rebase pin/affinity 组合、完整 suite、CI 或
+  support promotion；正式 M0-release 仍延期。
 
 永久成本：8 个以内职责单一的 integration modules、3 个 Hydra owners、一个薄 training
 script、独立 CLI route、pth resolver、native player path 和一个既有cold-path visual helper
 的topology regression。
 
-### Code #10：release 和 support promotion
+### Code #10：M0-dev provisional validation
 
 状态：已规划，待实现。执行 prompt 为
 docs/simtoolreal_sapg_code10_prompt.md。
 
-唯一主要结果：把已经真实验证的开发路径晋升为可安装、可维护、可审查的正式 support
-候选；算法、task、env 和 native RL-Games owner 不在本 Code 重新设计。
+唯一主要结果：把已经真实验证的开发路径核验为可复验、可维护、可审查的 M0-dev
+provisional candidate；算法、task、env 和 native RL-Games owner 不在本 Code 重新设计。
+当前不升 MuJoCoUni 版本、不制作正式 sdist、不把 dev identity 写成正式 support。
 
 按 prompt 的四个 child 顺序只做：
 
-1. 10A：当前 M0-dev identity 上的 S1 finite multi-epoch train/play 和 release preflight；
-2. 10B：真实 12288/2048/6 profile，以及 mixed-layout/autoreset 组合测试和 affinity ABI
-   preflight；
-3. 10C：维护者提供的 M0-release sdist 的 clean-install、artifact/hash/provenance 验证，
-   再把 Target pyproject/uv.lock 从 0.4.0.dev0 晋升为正式 artifact；
-4. 10D：正式 artifact 下的组合回归、dependency/source/cold-path audit、安装文档、support
-   matrix、make test-all 和控制 session handoff。
+1. 10A：把 Target pyproject/uv.lock 从旧 SHA 更新到远端可获取的 rebased M0-dev SHA，
+   并完成 provenance 和安装态审计；版本继续为 `0.4.0.dev0`；
+2. 10B：新 pin 上的 S1 finite multi-epoch train/play 和真实 12288/2048/6 profile；
+3. 10C：mixed-layout/autoreset/CPU affinity 组合近风险回归；
+4. 10D：M0-dev 组合回归、dependency/source/cold-path audit、provisional 安装文档、
+   support matrix 记录、make test-all 和控制 session handoff。
 
-MuJoCoUni owner 仓库仍是外部写入边界：当前没有正式 0.4.0 artifact 或
-cpu_ids/worker_cpu_ids ABI 时，执行 session 必须在 10C/对应 preflight 返回 BLOCKED，不得
-修改、发布或清理外部仓库，不得用 dirty sibling checkout 代替 release。
+当前 MuJoCoUni rebase 后的 M0-dev 已提供 `cpu_ids`、`worker_cpu_ids()` 和真实
+`was_autoreset` property；这些 ABI 必须在 10A/10C 真实 GREEN，不能 skip。MuJoCoUni owner
+仓库仍是外部写入边界：执行 session 不修改、发布或清理外部仓库，不得用 dirty sibling
+checkout 代替已锁定的 Git SHA。正式 0.4.0 artifact、clean-install promotion、跨平台
+support 和 maintainer 产品判断作为后续独立 release 任务延期。
 
-没有 M0-release、真实 train/play、完整测试、当前 HEAD CI 和 maintainer 产品判断时，
-Code #10 保持未完成；实现 session 的 DONE 只能表示 local candidate 已交回控制 session。
+没有 M0-dev 真实 train/play、完整测试和当前 HEAD CI 时，Code #10 的 M0-dev candidate
+保持未完成；实现 session 的 DONE 只能表示 local candidate 已交回控制 session。即使
+candidate 完成，也不能据此宣称正式 release/support。
 
-永久成本：正式 MuJoCoUni dependency、artifact/provenance manifest、support docs 和
-升级复验；不新增第二套训练 runtime 或 release wrapper。
+永久成本：一个固定 rebased M0-dev dependency、source/provenance manifest、provisional
+support docs 和升级复验；不新增第二套训练 runtime 或 release wrapper。
 
 ## 10. T0 和 T1
 
@@ -862,22 +871,33 @@ registry mujoco-uni-runtime 0.3.1 在真实 mixed-layout model oracle 上失败�
 ~~~text
 mujoco-uni-runtime 0.4.0.dev0
 Git URL https://github.com/lemon-star608/mujoco_uni.git
-source SHA 7205e070e983df90d520f0f8593853013e976746
+source SHA 54a2197be5b0cd65e9d71ff884d8415191925136
 ~~~
 
-Code #6 已把 pyproject 和 uv.lock 固定到上述 HTTPS Git URL 与完整 SHA；安装态
-`direct_url.json` 也记录同一 requested revision 和 commit id，`BatchEnvPool.was_autoreset`
-为真实 public property。该 identity 只用于开发阶段，不是 M0-release artifact。
+Code #6 的历史 pyproject/uv.lock pin 是旧 SHA `7205e070e983df90d520f0f8593853013e976746`；
+MuJoCoUni rebase 后，Code #10 需要把 Target 更新到上面的 `54a2197…` 完整 SHA。当前
+M0-dev 安装态的 `direct_url.json`、版本和 source commit 必须一致；该 identity 只用于
+provisional candidate，不是 M0-release artifact。
 
-M0-dev 必须提供：
+当前 M0-dev 必须提供：
 
 - mixed-data-layout allocation；
-- per-env autoreset reporting。
+- per-env autoreset reporting；
+- `BatchEnvPool.__init__(cpu_ids=...)`；
+- public `worker_cpu_ids()`。
 
-如果使用 wheel/sdist，还必须记录 artifact filename、SHA256 和指向同一 source SHA 的
-provenance。不得依赖 dirty sibling checkout。
+外部核验已确认该 rebase 后 HEAD 仍为 `0.4.0.dev0`，并且 affinity + batch targeted tests
+通过；Target 只允许锁定该 Git SHA，不得依赖 dirty sibling checkout。生产默认仍显式使用
+`cpu_ids=null`，10B 另行用可用 CPU IDs 做真实 affinity contract test。
 
-M0-dev 的 cpu_ids=null 允许任务和 smoke 前进，但不能声称 CPU affinity support。
+2026-08-21 的控制 session 只读核验结果为 targeted 26 passed、完整 suite 50 passed，外部
+tracked tree 干净；`docs/unilab_extension_status.md` 以及出现时的 `MUJOCO_LOG.TXT` 是用户
+untracked 文件，不能清理。最终 `git ls-remote` 核验确认远端
+`refs/heads/feat/geom-size-pos-per-env-fields` 已指向 `54a2197…`，因此 Target 可以从正式
+HTTPS Git URL 获取该 SHA；Code #10 10A 仍必须 fresh 复核这一 provenance gate。
+
+M0-dev candidate 可以在不升版本的前提下声称“CPU affinity ABI 已验证”，但不能把它写成
+正式跨平台 support；Linux/aarch64、无 ABI 安装态和未核验 platform 继续 unsupported。
 
 M0-release 在真实 task train/play 后完成：
 
@@ -887,11 +907,11 @@ M0-release 在真实 task train/play 后完成：
 - 恢复并验证 cpu_ids/worker_cpu_ids ABI；
 - 同时通过 mixed-layout、autoreset 和 affinity；
 - 用正式 artifact 替换 dev dependency；
-- 阻塞最终 support，但不阻塞 Code #1-#9 的开发。
+- 这是一项独立 release/support 任务，不阻塞当前 M0-dev candidate。
 
 MuJoCoUni owner 仓库中的生产修改需要独立普通中文 roadmap 和明确授权，本路线不自动
-授权外部源码修改。没有 maintainer 提供的 artifact 时，Code #10 在 release preflight
-处保持 BLOCKED，不得用 dirty sibling checkout 代替。
+授权外部源码修改。当前 Code #10 不要求 maintainer artifact；没有正式 artifact 只需在
+handoff 中标记 deferred，不得用 dirty sibling checkout 代替。
 
 ## 13. 执行和验证协议
 
@@ -955,10 +975,10 @@ Code #10：
 - M0-dev S1 finite multi-epoch train/play；
 - 12288/2048/6 真实 profile；
 - mixed-layout、per-env autoreset 和 cpu_ids/worker_cpu_ids 组合；
-- clean-install M0-release artifact、hash/provenance 和 dependency audit；
+- rebased M0-dev Git pin、source/lock/direct_url/provenance 和 dependency audit；
 - make test-all；
 - final-current-head remote CI；
-- maintainer support judgment。
+- provisional handoff；正式 M0-release 和 maintainer support judgment 延期。
 
 ### 13.3 Required SAPG mode
 
@@ -992,10 +1012,11 @@ production path 暴露前和最终 PR 前必须运行 make test-all。最终 PR 
 - 需要新 collector、async protocol、distributed 或 export 才能工作；
 - 当前 Code 引入未批准 public owner、execution path 或 support scope；
 - Source/Target 或 T0/T1 出现无法解释 mismatch；
-- canonical AMP、真实 MuJoCo 或 M0-release 不能实际执行；
-- M0-release artifact 缺失、版本仍为 .dev0、hash/provenance 不完整或 affinity ABI 缺失；
+- canonical AMP、真实 MuJoCo 或当前 M0-dev candidate 不能实际执行；
+- M0-dev source/lock/direct_url/provenance 不完整或 affinity ABI 缺失；正式 M0-release
+  artifact 缺失或版本仍为 .dev0 不阻塞当前 candidate，但必须标记 deferred；
 - required tests 有 skip、failure 或未解释 warning；
-- Source/vendor/M0-dev/M0-release provenance 不完整；
+- Source/vendor/M0-dev provenance 不完整；
 - 只能使用 dirty sibling checkout；
 - exact resume 需要新 public env snapshot contract；
 - 当前 Code 超出已批准的文件、规模或永久维护成本；
@@ -1006,16 +1027,20 @@ production path 暴露前和最终 PR 前必须运行 make test-all。最终 PR 
 
 ## 15. 完成和 support wording
 
-整条路线只有在以下事实全部有当前证据时完成：
+当前 Code #10 M0-dev candidate 只有在以下事实全部有当前证据时完成：
 
 - Code #1-#10 都有范围正确的代码 commit；
 - Source/vendor identity 和 frozen oracles 无未声明漂移；
 - backend contracts、T0、T1 和 production vertical slice 通过；
 - 真实 M0-dev train/play 和 12288/2048 profile 通过；
-- M0-release 是 clean-install、身份固定的正式 artifact；
+- Target 锁定 rebased M0-dev SHA，mixed-layout、autoreset 和 affinity ABI 均真实通过；
 - make test-all 通过；
 - final-current-head CI 全部通过；
-- maintainer 明确批准正式 support。
+- handoff 明确记录正式 M0-release 和 maintainer support judgment 尚未完成。
+
+上述完成只表示这条迁移的 M0-dev provisional candidate 完成。正式 support 还要求后续
+独立完成 clean-install M0-release artifact、release provenance 和 maintainer 明确批准；
+这些延期条件不能反向阻塞当前 candidate，也不能被当前 candidate 冒充为已完成。
 
 最终允许的准确表述：
 

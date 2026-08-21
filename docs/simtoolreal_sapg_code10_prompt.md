@@ -8,21 +8,19 @@
 
 ## 1. 本批唯一结果
 
-把 Code #9 已验证的 M0-dev native RL-Games SAPG vertical slice 晋升为可以审查和声明
-支持的正式路径。Code #10 是 release、安装、组合回归和证据整理批次，不是算法迁移批次。
-完成候选必须同时满足：
+把 Code #9 已验证的 M0-dev native RL-Games SAPG vertical slice 晋升为可复验、可维护的
+M0-dev provisional 路径。当前 Code #10 不升 MuJoCoUni 版本、不制作正式 sdist，也不把
+dev identity 宣称为正式 release；M0-release 作为后续独立 release 任务保留。
+完成当前 dev candidate 必须同时满足：
 
 1. 当前 M0-dev runtime 上有超过 Code #9 tiny slice 的有限多 epoch S1 train/play 证据；
 2. 12288/2048/6 的真实 native profile 至少完成一个有限 epoch、checkpoint 和 cleanup；
-3. 维护者提供的 M0-release artifact 能在没有 sibling checkout 的 clean environment 中
-   安装，并且 mixed-layout、was_autoreset、cpu_ids 和 worker_cpu_ids public ABI
-   均可验证；
-4. UniLab 的 mujoco extra 和 uv.lock 不再依赖 0.4.0.dev0 或 dirty Git checkout，
-   而是指向已核验的正式 artifact；
-5. mixed-layout、per-env autoreset、CPU affinity 的组合近风险回归通过，release gate
-   没有被 skip；
-6. focused/full local gates、support docs、support matrix、make test-all 和最终
-   current-head CI 证据齐全。
+3. UniLab 的 mujoco extra 和 uv.lock 指向已核验的 rebased M0-dev Git SHA，不解析
+   dirty sibling checkout；
+4. mixed-layout、per-env autoreset 和 CPU affinity 组合近风险回归通过；
+5. focused/full local gates、M0-dev 文档和控制 session handoff 证据齐全；
+6. 报告明确写出正式 M0-release、artifact promotion 和 maintainer support judgment
+   尚未完成。
 
 唯一允许的生产数据流仍然是：
 
@@ -41,7 +39,8 @@ player、task formula、reset、reward、observation、action 或 shared sim2sim
 
 实现 session 不执行 git add、git commit、git push、PR、stash、reset、clean、
 checkout 或切分支。控制 session 在审查后提交代码，运行提交后的验证，更新总指导并
-处理 remote CI 和 maintainer support judgment。
+处理 post-commit local/remote CI；正式 release/artifact promotion/support judgment 由后续
+release 任务决定。
 
 ## 2. 普通中文范围、规模和 child batches
 
@@ -49,11 +48,10 @@ checkout 或切分支。控制 session 在审查后提交代码，运行提交�
 
 - 用当前 M0-dev identity 运行真实 S1 train/play，证明 native path 可连续有限运行；
 - 运行真实 mujoco_12k owner，证明资源 profile、六 blocks、checkpoint 和 cleanup；
-- 对 M0-release artifact 做 provenance、clean-install、public ABI 和 target integration
-  检查；
-- 在 release 可用后，把 Target dependency 从 dev identity 晋升为正式 artifact；
+- 对当前 M0-dev Git SHA 做 provenance、安装态和 public ABI 检查；
+- 保持版本为 0.4.0.dev0，不做正式 artifact promotion；
 - 组合验证 mixed model layout、autoreset latch 和 CPU affinity；
-- 更新安装说明、支持矩阵和 release evidence manifest；
+- 更新 M0-dev 安装说明和 provisional support 记录，不把它写成正式 support；
 - 运行仓库规定的完整 local gates，留下可供控制 session 提交后复核的证据。
 
 ### 2.2 明确不做什么
@@ -67,22 +65,23 @@ checkout 或切分支。控制 session 在审查后提交代码，运行提交�
   不清理其用户已有的 dirty files；
 - 不用 /home/user/ws/lemon/mujoco_uni sibling checkout 作为安装依赖或测试替身；
 - 不通过 pytest.skip、importorskip、mock backend、放宽 tolerance、降低 profile、
-  关闭 wrench/autoreset/affinity 或删除失败证据来绕过 gate；
+  关闭 wrench/autoreset 或删除失败证据来绕过 gate；当前 M0-dev 不支持的能力必须明确
+  记录为 unsupported，不得伪装成通过；
 - 不接 Motrix、IsaacSim、async、distributed、multi-GPU、ROCm、export、torch.compile、
   通用 RL-Games support 或新的 public backend contract；
 - 不运行 PR 流程；没有当前提交的 remote CI 时，不声称正式 support 已完成。
 
 ### 2.3 规模和永久维护成本
 
-Code #10 是一个 release umbrella，按以下四个 child 顺序执行。每个 child 必须保持
+Code #10 是一个 M0-dev support-preparation umbrella，按以下四个 child 顺序执行。每个 child 必须保持
 约 15 个以内 touched paths、约 800 行以内净手写改动，并在下一个 child 前单独验证。
 测试/manifest 可以新增，生产 owner 只能在真实失败证明需要时做最小 owner-level 修正。
 
 永久成本限制为：
 
-- 一个正式 MuJoCoUni dependency 和一份 artifact/provenance manifest；
-- M0-dev/M0-release contract tests 和组合 affinity regression；
-- 安装/support 文档中的一条 SAPG support entry；
+- 一个固定 rebased M0-dev dependency 和一份 source/provenance manifest；
+- M0-dev contract tests 和组合 affinity regression；
+- 安装/support 文档中的一条 provisional SAPG entry；
 - 不新增第二套训练 runtime、release wrapper 或 backend abstraction。
 
 ### 2.4 Child batches
@@ -90,16 +89,16 @@ Code #10 是一个 release umbrella，按以下四个 child 顺序执行。每�
 必须按顺序执行以下 child；前一个 child 的 blocker 不得被下一个 child 绕过：
 
 ~~~text
-10A  M0-dev S1 finite multi-epoch train/play 与 release preflight
-10B  真实 12288/2048 profile、mixed-layout/autoreset 组合测试、affinity ABI preflight
-10C  外部提供的 M0-release artifact clean-install、provenance 和 dependency promotion
-10D  release 组合回归、audit/docs/support matrix、make test-all 和 control handoff
+10A  rebased M0-dev remote provenance、dependency pin、lock 和安装态审计
+10B  M0-dev S1 finite multi-epoch train/play 与真实 12288/2048 profile
+10C  mixed-layout/autoreset/affinity 组合近风险回归
+10D  dev-only docs、完整 local gates 和 control handoff
 ~~~
 
-10A/10B 可以在当前 dev identity 上进行，但只能把 cpu_ids=null 作为开发 smoke，
-不能写成 affinity support。10C 若没有维护者提供的正式 artifact，必须立即 # BLOCKED；
-实现 session 不得自行修改外部仓库来制造 artifact。10D 只有在 10C 的 artifact 和
-target lock 均已验证后才可执行。
+10A 必须先让 Target 从远端 Git URL 安装当前 rebased dev identity；不得让后续 train/test
+继续使用旧 `7205e070…` 安装态。10B/10C 才在新 pin 上运行；affinity ABI 必须真实通过，
+不能 skip。10A 不要求 sdist 或版本号变化。
+正式 M0-release、PyPI/artifact promotion 和跨平台 support 仍明确延期，不属于本批。
 
 ## 3. 必读内容、起点和固定身份
 
@@ -140,7 +139,8 @@ docs/sphinx/source/en/5-reference/5-support_matrix.md
 /home/user/ws/lemon/mujoco_uni/pyproject.toml
 /home/user/ws/lemon/mujoco_uni/.github/workflows/release.yml
 /home/user/ws/lemon/mujoco_uni/src/mujoco_uni/metadata.py
-/home/user/ws/lemon/mujoco_uni/src/mujoco_uni/batch_env.py
+/home/user/ws/lemon/mujoco_uni/src/mujoco_uni/runtime/batch.py
+/home/user/ws/lemon/mujoco_uni/tests/test_cpu_affinity.py
 /home/user/ws/lemon/mujoco_uni/tests/test_batch_env.py
 ~~~
 
@@ -149,31 +149,31 @@ docs/sphinx/source/en/5-reference/5-support_matrix.md
 本 prompt 的父 docs baseline 是：
 
 ~~~text
-0a1912490cd6dbb6a952aa93d52ebc06b62dc9b6
-docs: record SAPG Code 9 completion
+afaf0da276c7b4a5fe67b80c1691b7a5754a0d3f
+docs: plan SAPG Code 10 support promotion
 ~~~
 
-开始时运行以下只读检查。预期 prompt docs commit 是该 baseline 的一个直接 docs-only
+开始时运行以下只读检查。预期本次改口径 commit 是该 baseline 的一个直接 docs-only
 child；若条件不成立，返回 # BLOCKED，不要清理或覆盖现有改动。
 
 ~~~bash
 set -e
 set -o pipefail
-CODE10_BASE=0a1912490cd6dbb6a952aa93d52ebc06b62dc9b6
+CODE10_BASE=afaf0da276c7b4a5fe67b80c1691b7a5754a0d3f
 test "$(git rev-parse --abbrev-ref HEAD)" = "feat/simtoolreal-sapg-rlgames"
 git merge-base --is-ancestor "$CODE10_BASE" HEAD
 test "$(git rev-list --count "$CODE10_BASE"..HEAD)" -eq 1
 test "$(git diff --name-status "$CODE10_BASE"..HEAD)" = \
-  $'A\tdocs/simtoolreal_sapg_code10_prompt.md\nM\tdocs/simtoolreal_sapg_source_fidelity_migration_plan.md'
+  $'M\tdocs/simtoolreal_sapg_code10_prompt.md\nM\tdocs/simtoolreal_sapg_source_fidelity_migration_plan.md'
 test -z "$(git status --short)"
 test -z "$(git diff --cached --name-only)"
 git log -3 --oneline
 git status --short --branch
 ~~~
 
-记录外部仓库的 branch、HEAD 和 dirty files 仅用于 provenance 报告。外部当前已有的
-MUJOCO_LOG.TXT 与 docs/unilab_extension_status.md 属于用户文件，禁止清理、reset、
-checkout 或改写。
+记录外部仓库的 branch、HEAD 和 dirty files 仅用于 provenance 报告。外部任何 untracked
+文件（包括出现时的 MUJOCO_LOG.TXT 和 docs/unilab_extension_status.md）均属于用户，禁止
+清理、reset、checkout 或改写。
 
 ### 3.3 固定 algorithm/runtime identity
 
@@ -200,36 +200,68 @@ Code #10 不重新生成 Code #1-#5 fixtures。UNILAB_REQUIRE_SAPG=1 仍必须�
 
 ### 3.4 M0-dev identity
 
-10A/10B 开始前核验并记录：
+10A 开始前核验并记录：
 
 ~~~text
 mujoco-uni-runtime==0.4.0.dev0
 URL: https://github.com/lemon-star608/mujoco_uni.git
-source SHA: 7205e070e983df90d520f0f8593853013e976746
+source SHA: 54a2197be5b0cd65e9d71ff884d8415191925136
+source tree: 771de554330b698bc12e5110682af1d8de433ee2
 BatchEnvPool.was_autoreset: real property
-cpu_ids/worker_cpu_ids: not a support claim; null-only development path
+BatchEnvPool.__init__: accepts cpu_ids
+BatchEnvPool.worker_cpu_ids(): public method
 ~~~
 
-M0-dev 只证明 mixed-data-layout 和 per-env autoreset；不证明 CPU affinity，不得把
-existing optional affinity test 的 skip 统计为通过。
+该 SHA 是 rebase 后的 M0-dev source identity，版本仍保持 0.4.0.dev0。它包含 affinity
+基线提交 cf0b759、7d888ed，以及 rebase 后的 geom/autoreset/mixed-layout/mocap commits
+614f26f、996004a、194ada6、54a2197。旧的 7205e070 SHA 不再是当前 lock 目标，不能把
+“旧 SHA 的安装态”当作新 ABI 证据。
 
-### 3.5 M0-release acceptance identity
+当前 M0-dev candidate 要求 mixed-layout、per-env autoreset 和 CPU affinity 都真实通过；
+不允许用 null-only path 或 skip 代替 affinity。正式 M0-release 仍然不在本 Code 完成。
 
-正式 artifact 必须由 MuJoCoUni maintainer 在独立、干净的 0.4 release 工作流中提供。
-实现 session 只消费 artifact，不修改或发布外部代码。artifact 必须满足：
+控制 session 已在本地 tracked-clean HEAD 上只读核验 targeted affinity/batch tests 为
+26 passed、完整 MuJoCoUni suite 为 50 passed。实现 session 必须重新核验外部 local HEAD，
+并确认新 SHA 已从正式 HTTPS Git URL 可获取。建议固定检查 intended branch ref：
+
+~~~bash
+set -e
+set -o pipefail
+M0_SHA=54a2197be5b0cd65e9d71ff884d8415191925136
+M0_URL=https://github.com/lemon-star608/mujoco_uni.git
+M0_REF=refs/heads/feat/geom-size-pos-per-env-fields
+test "$(git -C /home/user/ws/lemon/mujoco_uni rev-parse HEAD)" = "$M0_SHA"
+test -z "$(git -C /home/user/ws/lemon/mujoco_uni status --short --untracked-files=no)"
+test "$(git ls-remote "$M0_URL" "$M0_REF" | cut -f1)" = "$M0_SHA"
+uv run --project /home/user/ws/lemon/mujoco_uni pytest \
+  /home/user/ws/lemon/mujoco_uni/tests/test_cpu_affinity.py \
+  /home/user/ws/lemon/mujoco_uni/tests/test_batch_env.py -q
+uv run --project /home/user/ws/lemon/mujoco_uni pytest \
+  /home/user/ws/lemon/mujoco_uni/tests -q
+~~~
+
+若 remote ref 还不是该 SHA，立即 # BLOCKED 并请 maintainer 发布 rebased commit；不得改用
+local path、editable sibling 或旧 remote SHA。外部 untracked 用户文件不影响 tracked-clean
+判定，也不得清理。
+
+### 3.5 Deferred M0-release identity
+
+以下是未来独立 release 任务的要求，不是当前 M0-dev candidate 的 blocker。正式 artifact
+仍必须由 MuJoCoUni maintainer 在独立、干净的 0.4 release 工作流中提供；实现 session
+不得修改或发布外部代码：
 
 - distribution 名为 mujoco-uni-runtime；
 - release version 为明确的 0.4.0，不是 .dev0、local version 或 editable install；
 - artifact 是 release workflow 允许的 sdist（当前 workflow 不发布 wheel）；
 - 提供 artifact filename、SHA256、构建用 MuJoCo 版本、Python/platform、构建 source
   commit 和 source tree/provenance；
-- 构建 source commit 是 7205e070e983df90d520f0f8593853013e976746 的 descendant，并
-  明确包含 mixed-layout、per-env autoreset、cpu_ids constructor ABI 和
+- 构建 source commit 必须有独立 provenance，并明确包含 mixed-layout、per-env autoreset、
+  cpu_ids constructor ABI 和
   worker_cpu_ids() public method；
 - 安装后的 BatchEnvPool.was_autoreset 是真实 property，不是动态 fallback；
 - clean-install 不解析或依赖 /home/user/ws/lemon/mujoco_uni sibling checkout。
 
-artifact 通过环境变量传入，不得猜测路径：
+未来 release 任务才通过环境变量传入 artifact：
 
 ~~~bash
 test -n "$MUJOCO_UNI_RELEASE_ARTIFACT"
@@ -237,7 +269,8 @@ test -f "$MUJOCO_UNI_RELEASE_ARTIFACT"
 sha256sum "$MUJOCO_UNI_RELEASE_ARTIFACT"
 ~~~
 
-变量缺失、文件不存在、hash/provenance/ABI 任一项无法核验时，10C 立即 # BLOCKED。
+当前 Code #10 不要求这些 release 环境变量；正式 release 任务中变量缺失、文件不存在、
+hash/provenance/ABI 任一项无法核验时，才应 # BLOCKED。
 
 ## 4. 允许写入的 Target 路径
 
@@ -247,37 +280,38 @@ sha256sum "$MUJOCO_UNI_RELEASE_ARTIFACT"
 ### 4.1 10A
 
 ~~~text
-tests/algos/rlgames_sapg/**
-tests/fixtures/simtoolreal_sapg/m0_dev_*.json
+pyproject.toml
+uv.lock
+tests/algos/rlgames_sapg/test_dependency.py
+tests/base/backend/test_mujoco_uni_runtime_contract.py
+tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json
 ~~~
 
-优先只新增 focused test/harness/manifest，不改 production owner、vendor、dependency
-或现有 Code #9 semantics。若必须改已有 test，只能是同目录中与 M0-dev identity 直接
-相关的最小断言。
+只允许把 M0-dev dependency 从旧的 7205e070 SHA 更新到
+54a2197be5b0cd65e9d71ff884d8415191925136，并记录 remote/source/lock/安装态 provenance。
+禁止提交 local path、editable source、临时 index、未审查的 URL 或 sibling checkout。
 
 ### 4.2 10B
 
 ~~~text
 tests/algos/rlgames_sapg/**
-tests/base/backend/test_mujoco_m0_release_matrix.py
-tests/envs/manipulation/simtoolreal/test_m0_release_matrix.py
+tests/fixtures/simtoolreal_sapg/m0_dev_*.json
 ~~~
 
-允许为近风险测试增加一个组合 harness；不得修改 backend public contract 或把
-cpu_ids 变成默认生产配置。
+优先复用既有真实 CLI 和 vertical-slice harness，只在需要保存/校验 S1 与 12k evidence
+时新增窄测试或 manifest 字段；不改 production owner、vendor 或 Code #9 semantics。
 
 ### 4.3 10C
 
 ~~~text
-pyproject.toml
-uv.lock
-tests/algos/rlgames_sapg/test_dependency.py
-tests/base/backend/test_mujoco_uni_runtime_contract.py
-tests/fixtures/simtoolreal_sapg/m0_release_manifest.json
+tests/base/backend/test_mujoco_cpu_affinity_wiring.py
+tests/envs/manipulation/simtoolreal/test_m0_dev_matrix.py
+tests/fixtures/simtoolreal_sapg/m0_dev_*.json
 ~~~
 
-只有在 artifact 已通过 3.5 全部核验后，才允许触碰这组路径。禁止提交 local path、
-editable source、临时 index、未审查的 URL 或无 hash 的 release dependency。
+允许为近风险测试增加一个组合 harness，并把既有 affinity test 从旧 ABI 下的 module skip
+转为新 pin 下真实收集/GREEN；不得修改 backend public contract 或把 cpu_ids 变成默认
+生产配置。
 
 ### 4.4 10D
 
@@ -295,23 +329,85 @@ tests/envs/manipulation/simtoolreal/**
 ~~~
 
 10D 不修改总指导文档；控制 session 审查后单独更新
-docs/simtoolreal_sapg_source_fidelity_migration_plan.md。support matrix 只能在所有
-release evidence 已提交后把 rlgames_sapg / SimToolReal / mujoco 提升到真实证据等级；
-不得自动标为 Recommended 或 Benchmarked，除非仓库中已有对应 maintainer metadata。
+docs/simtoolreal_sapg_source_fidelity_migration_plan.md。安装文档可以记录
+rlgames_sapg / SimToolReal / mujoco 的 M0-dev provisional 状态，但 support matrix 不得
+把它标为正式 Recommended、Benchmarked 或跨平台 release support。
 
-## 5. Child 10A：M0-dev S1 finite multi-epoch train/play
+## 5. Child 10A：rebased M0-dev dependency pin 和安装态审计
 
 ### 5.1 目标
 
-证明当前 dev runtime 上不是只跑 Code #9 的单 epoch N=6 vertical slice，而是可以用
-同一个 native Runner/A2CAgent path 连续完成有限多 epoch、保存 native .pth、关闭
-env/tracker/writer，再用 native player 生成视频。S1 是 test-only invocation，不新增
-一个 production YAML profile。
+先把 Target 的 mujoco extra 和 uv.lock 从旧 `7205e070…` 更新到当前 rebased M0-dev
+`54a2197…`。版本必须继续是 `0.4.0.dev0`；本 child 不制作 sdist、不改版本号、不修改
+外部仓库。第 3.4 节的 remote ref gate 未通过时不得写 Target dependency。
 
-### 5.2 固定 S1 invocation
+### 5.2 Target dependency update
 
-保持六 blocks 不变，使用以下最小覆盖值；只允许通过 Hydra override 注入，不得把这些
-值写回 mujoco.yaml：
+1. 将 pyproject.toml 中的 Git revision 更新为
+   `54a2197be5b0cd65e9d71ff884d8415191925136`，保留 exact dev version；
+2. 用 `uv lock` 重新解析 lock，只接受同一 HTTPS URL 和完整 SHA，不引入无关升级；
+3. 用 `uv sync --extra mujoco --extra rlgames-sapg` 构建并安装 Target 环境；
+4. 更新 dependency/runtime contract tests 的 expected source SHA；
+5. 写入 reviewed、deterministic 的
+   `tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json`，至少包含：
+
+~~~text
+schema
+distribution/version
+source URL/ref/commit/tree
+rebase mapping and affinity commits
+build/runtime mujoco version
+python/platform
+external focused/full test evidence
+mixed-layout and was_autoreset evidence
+cpu_ids constructor and worker_cpu_ids evidence
+target pyproject/uv.lock/direct_url identity
+formal_release = deferred
+~~~
+
+manifest 不写临时目录、运行时间或 sibling path；普通 pytest 只校验它，不重写它。
+
+### 5.3 安装态 gate
+
+至少运行：
+
+~~~bash
+set -e
+set -o pipefail
+uv lock --check
+uv sync --extra mujoco --extra rlgames-sapg
+uv run --extra mujoco --extra rlgames-sapg python - <<'PY'
+import importlib.metadata as metadata
+import inspect
+import json
+
+from mujoco_uni.batch_env import BatchEnvPool
+
+dist = metadata.distribution("mujoco-uni-runtime")
+direct_url = json.loads(dist.read_text("direct_url.json") or "{}")
+assert dist.version == "0.4.0.dev0"
+assert "cpu_ids" in inspect.signature(BatchEnvPool).parameters
+assert callable(BatchEnvPool.worker_cpu_ids)
+assert isinstance(BatchEnvPool.was_autoreset, property)
+print(json.dumps(direct_url, sort_keys=True))
+PY
+uv run --extra mujoco --extra rlgames-sapg pytest \
+  tests/base/backend/test_mujoco_uni_runtime_contract.py \
+  tests/algos/rlgames_sapg/test_dependency.py -q
+~~~
+
+检查 stdout 中 `direct_url.json` 的 URL、requested revision 和 commit id 均是固定新 SHA，
+且不含 `/home/user/ws/lemon/mujoco_uni`。`uv.lock` 只允许该 dependency 的预期 source 变化。
+如果 remote 不可获取、安装态仍是旧 SHA、任一 ABI 缺失或必须使用 sibling checkout，返回
+`# BLOCKED`；不要退回旧 pin，也不要把版本号改成 0.4.0。
+
+## 6. Child 10B：M0-dev S1 和真实 12k profile
+
+### 6.1 S1 finite multi-epoch train/play
+
+证明新 pin 上的 native Runner/A2CAgent path 能连续完成有限多 epoch、保存 native `.pth`、
+exact-once 关闭 env/tracker/writer，再由 native player 生成视频。S1 只用 Hydra overrides，
+不新增 production YAML：
 
 ~~~text
 algo.num_envs=6
@@ -327,24 +423,18 @@ rl_games.params.config.save_frequency=1
 training.play_env_num=6
 training.play_steps=8
 training.device=cuda:0
-env.cpu_ids=null
++env.cpu_ids=null
 ~~~
 
-S1 必须使用当前 mujoco-uni-runtime==0.4.0.dev0，并显式设置
-UNILAB_REQUIRE_SAPG=1。缺 CUDA、Torch canonical identity 或真实 MuJoCo pool 时
-返回 blocker，不改成 fake/CPU 通过。
-
-### 5.3 必须运行的真实命令
-
-在 repo 外用 mktemp -d 创建 log root，训练和 eval 均通过公开 CLI；命令中的
-S1_ROOT、S1_RUN 由 session 实际捕获并记录：
+在 repo 外创建 log root，训练和 eval 都使用公开 CLI：
 
 ~~~bash
 set -e
 set -o pipefail
 S1_ROOT="$(mktemp -d)"
 export UNILAB_REQUIRE_SAPG=1
-uv run train --algo rlgames_sapg --task SimToolReal --sim mujoco \
+uv run --extra mujoco --extra rlgames-sapg train \
+  --algo rlgames_sapg --task simtoolreal --sim mujoco \
   algo.num_envs=6 \
   rl_games.params.config.expl_coef_block_size=1 \
   rl_games.params.config.horizon_length=4 \
@@ -356,41 +446,29 @@ uv run train --algo rlgames_sapg --task SimToolReal --sim mujoco \
   rl_games.params.config.max_epochs=2 \
   rl_games.params.config.save_frequency=1 \
   training.device=cuda:0 training.no_play=true training.log_root="$S1_ROOT" \
-  env.cpu_ids=null
+  +env.cpu_ids=null
 S1_TASK_ROOT="$S1_ROOT/SimToolReal"
 S1_RUN_PATH="$(find "$S1_TASK_ROOT" -mindepth 1 -maxdepth 1 -type d -name '0_*' -print | sort | tail -n 1)"
 test -n "$S1_RUN_PATH"
 S1_RUN="$(basename "$S1_RUN_PATH")"
-uv run eval --algo rlgames_sapg --task SimToolReal --sim mujoco --render-mode record \
+uv run --extra mujoco --extra rlgames-sapg eval \
+  --algo rlgames_sapg --task simtoolreal --sim mujoco --render-mode record \
   --load-run "$S1_RUN" \
   training.device=cuda:0 training.play_env_num=6 training.play_steps=8 \
-  training.log_root="$S1_ROOT" env.cpu_ids=null
+  training.log_root="$S1_ROOT" +env.cpu_ids=null
 ~~~
 
-如果 CLI 不能直接导出 run name，必须从实际 native run directory 读取并再次运行 eval；
-不得改脚本来猜测路径。可用 scripts/train_rlgames_sapg.py 的已有 API 作为 near-risk
-补充，但不能代替公开 CLI 证据。
+CLI task slug 是 `simtoolreal`，runtime `training.task_name` 仍是 `SimToolReal`；cpu_ids 不在
+基础 owner 时使用 `+env.cpu_ids=null`。第二次使用独立 root 重复 S1 train/play；不要求两次
+physics trajectory bit-exact。
 
-### 5.4 S1 acceptance
+S1 必须证明 epoch/frame 超过 Code #9 单 epoch基线；checkpoint 的 actor/central optimizer、
+RMS/RNN state 非空且 `env_state=None`；每次最终只有 train/eval 两个 run directories，MP4
+非空，native scratch、materialized roots、writer、renderer 和 GPU process 均清理。
 
-必须保存以下事实：
+### 6.2 真实 12288/2048/6 profile
 
-- train run 真实经过 Runner.load -> set_vec_env -> run_train -> A2CAgent.train；
-- epoch/frame 大于 Code #9 单 epoch基线，native .pth payload、optimizer/RMS/RNN state
-  非空且 env_state=None；
-- train root 只有一个 run directory；eval 后只有 train/eval 两个 directory；
-- eval video 是非空 MP4，使用 assigned visual model，close 后所有 materialized temp
-  roots 消失；
-- run metadata 记录 dev version、source SHA、Torch/CUDA/cuDNN、cpu_ids=null 和
-  command overrides；
-- 第二次独立 S1 运行至少复用同一 contract 并完成 cleanup；不要求 physics trajectory
-  bit-exact。
-
-## 6. Child 10B：真实 12k profile 和组合近风险
-
-### 6.1 12k profile
-
-必须 compose 已有 task=simtoolreal/mujoco_12k，不能临时修改 base owner。固定检查：
+必须通过 `--profile 12k` compose 已有 `mujoco_12k.yaml`，固定验证：
 
 ~~~text
 algo.num_envs=12288
@@ -400,97 +478,56 @@ horizon_length=16
 seq_length=16
 action/actor/critic=29/140/162
 training.sim_backend=mujoco
-env.cpu_ids=null for the dev run
++env.cpu_ids=null
 ~~~
 
-执行一次真实有限 native train（建议 max_epochs=1、no_play=true、save_frequency=1）
-并检查 checkpoint、非空 optimizer state、run metadata、pool cleanup 和显存/进程 cleanup。
-不得把 6-env S1 override 或缩小后的 block size 当作 12k 证据。OOM、native crash、
-missing CUDA 或 profile preflight failure 都是 blocker，不得降低到另一个 profile 后宣称
-12k 通过。
+运行一次真实有限 native train：
 
-### 6.2 mixed-layout/autoreset/affinity 组合
+~~~bash
+PROFILE_ROOT="$(mktemp -d)"
+UNILAB_REQUIRE_SAPG=1 uv run --extra mujoco --extra rlgames-sapg train \
+  --algo rlgames_sapg --task simtoolreal --sim mujoco --profile 12k \
+  rl_games.params.config.max_epochs=1 \
+  rl_games.params.config.save_frequency=1 \
+  training.device=cuda:0 training.no_play=true training.log_root="$PROFILE_ROOT" \
+  +env.cpu_ids=null
+~~~
 
-新增一个 focused combination test（或在批准目录中最小扩展现有 near-risk test），真实
-构造至少包含 catalog indexes 0、1、7 的 mixed model assignments，并在同一 pool 生命周期
-内验证：
+检查真实 profile、checkpoint、非空 optimizer/RMS/RNN state、`env_state=None`、run metadata、
+pool/native scratch 和显存/进程 cleanup。不得用 S1 overrides 或缩小 block size 代替；OOM、
+native crash、missing CUDA 或 checkpoint 不完整均为 blocker。
 
-1. 三种 topology 的 compiled model/visual mapping 与 Code #8/9 anchors 一致；
-2. per-env was_autoreset 在 baseline、selected row 和多 substep OR-latch 上 exact；
-3. 选定 rows 的 reset/cache/terminal observation 不污染其他 rows；
-4. 正式 runtime 提供 BatchEnvPool.__init__(cpu_ids=...) 和 public
-   worker_cpu_ids() 时，用当前可用 CPU IDs 真实创建 pool，检查 worker mapping、step、
-   autoreset 和 close；
-5. cpu_ids=None 仍保持 OS scheduling，不能把它记录为 affinity support。
+## 7. Child 10C：mixed-layout/autoreset/affinity 组合近风险
 
-若安装态没有 cpu_ids 参数、worker_cpu_ids()、真实 was_autoreset property，在
-10B 末尾立即报告缺失 ABI 并停止；不要 skip、monkeypatch、私有 fallback 或修改
-Target backend 猜测兼容。
+新增一个 focused combination test file，真实构造
+含 catalog indexes 0、1、7 的 mixed model assignments，并验证：
 
-## 7. Child 10C：M0-release clean-install 和 dependency promotion
+1. 三种 topology 的 compiled model/visual mapping 与 Code #8/#9 anchors 一致；
+2. `was_autoreset` baseline、selected row、多 substep OR-latch 和下一步 clear exact；
+3. selected-row reset/cache/terminal observation 不污染其他 rows；
+4. 用当前进程可用 CPU IDs 经 Target public config/backend wiring 创建 pool，
+   `worker_cpu_ids()` 返回 exact mapping，并能 step、autoreset 和 close；
+5. `cpu_ids=None` 保持 OS scheduling，不能冒充 affinity support。
 
-### 7.1 外部 artifact gate
-
-先执行 3.5 的环境变量、filename/hash、version、provenance 和 public ABI 检查。可用
-isolated uv invocation 验证安装态，示例：
+先运行既有 affinity test，再运行组合测试和邻近 runtime/task gate：
 
 ~~~bash
 set -e
 set -o pipefail
-RELEASE_ROOT="$(mktemp -d)"
-uv run --isolated \
-  --with "$MUJOCO_UNI_RELEASE_ARTIFACT" \
-  --with "mujoco==$MUJOCO_M0_RELEASE_MUJOCO_VERSION" \
-  python -c "import importlib.metadata as m, mujoco_uni; print(m.version('mujoco-uni-runtime')); print(mujoco_uni.__version__)"
+uv run --extra mujoco --extra rlgames-sapg pytest \
+  tests/base/backend/test_mujoco_cpu_affinity_wiring.py -q
+uv run --extra mujoco --extra rlgames-sapg pytest \
+  tests/envs/manipulation/simtoolreal/test_m0_dev_matrix.py -q
 ~~~
 
-先把 artifact manifest 中的真实 MuJoCo version 写入环境变量
-MUJOCO_M0_RELEASE_MUJOCO_VERSION；该变量不是可猜测值。把完整 stdout、installed metadata、
-direct_url.json、
-BatchEnvPool signature、was_autoreset descriptor 和 worker_cpu_ids() 结果写入报告。
-如果 isolated install 仍解析 sibling checkout、.dev0、editable source 或错误 hash，
-立即 blocker。
+与 `cpu_ids`、`worker_cpu_ids()`、`was_autoreset` 或 mixed-layout 相关的测试必须真实收集
+且 GREEN，0 skip；不得 monkeypatch runtime、探测 backend private capability 或恢复旧
+SHA 的 module-level skip。
 
-### 7.2 Target dependency promotion
+## 8. Child 10D：M0-dev 回归、docs、完整 gates 和 handoff
 
-artifact 通过 7.1 后才可修改 Target：
-
-1. 将 pyproject.toml 的 mujoco extra 从 0.4.0.dev0 Git revision 改为
-   maintainer 批准的正式 mujoco-uni-runtime==0.4.0 source；
-2. 重新生成 uv.lock，保证 lock source、version、hash、marker 与 pyproject 一致，
-   不引入无关升级；
-3. 更新 dependency/runtime contract tests，使它们同时保留 M0-dev 历史说明和新的
-   installed release identity；
-4. 写入 tests/fixtures/simtoolreal_sapg/m0_release_manifest.json，至少包含：
-
-~~~text
-schema
-distribution/version
-artifact filename/sha256
-source commit/tree/provenance
-build mujoco version
-python/platform matrix
-mixed-layout evidence
-was_autoreset property evidence
-cpu_ids constructor evidence
-worker_cpu_ids result
-clean-install command and timestamp
-target pyproject/uv.lock source
-~~~
-
-5. 在一个不含 sibling checkout 的隔离 uv environment 中运行 target focused gate，并
-   验证 importlib.metadata.version("mujoco-uni-runtime")、direct_url.json 和 lock
-   source 均指向正式 artifact；
-6. 检查 root MUJOCO_LOG.TXT、vendor __pycache__、native scratch 和临时 materialized
-   roots，不把可复现的临时日志提交进仓库。
-
-若正式 artifact 只能通过修改 /home/user/ws/lemon/mujoco_uni、使用 dirty checkout、
-本地 editable path、无 provenance wheel 或临时 uncommitted patch 得到，返回 # BLOCKED
-并保留 Target 依赖为已知 dev identity；不要部分晋升。
-
-## 8. Child 10D：release 回归、docs、完整 gates 和 handoff
-
-只有 10C 已验证并且 Target lock 已切换到正式 artifact，才执行本节。
+只有 10C 已验证并且 Target lock 已切换到 rebased M0-dev SHA，才执行本节。当前
+candidate 不要求正式 sdist、0.4.0 版本或 release artifact。
 
 ### 8.1 Required local gates
 
@@ -500,40 +537,42 @@ target pyproject/uv.lock source
 set -e
 set -o pipefail
 export UNILAB_REQUIRE_SAPG=1
-uv run --extra mujoco pytest tests/algos/rlgames_sapg -q
-uv run --extra mujoco pytest tests/envs/manipulation/simtoolreal -q
-uv run --extra mujoco pytest tests/base/backend/test_mujoco_uni_runtime_contract.py \
-  tests/base/backend/test_mujoco_cpu_affinity_wiring.py \
-  tests/base/backend/test_mujoco_m0_release_matrix.py -q
-uv run --extra mujoco pytest tests/scripts/test_support_matrix.py -q
+uv run --extra mujoco --extra rlgames-sapg pytest tests/algos/rlgames_sapg -q
+uv run --extra mujoco --extra rlgames-sapg pytest \
+  tests/envs/manipulation/simtoolreal -q
+uv run --extra mujoco --extra rlgames-sapg pytest \
+  tests/base/backend/test_mujoco_uni_runtime_contract.py \
+  tests/base/backend/test_mujoco_cpu_affinity_wiring.py -q
+uv run --extra mujoco --extra rlgames-sapg pytest tests/scripts/test_support_matrix.py -q
 uv lock --check
 uv run ruff check src/unilab scripts tests
 uv run ruff format --check src/unilab scripts tests
-uv run --extra mujoco mypy src/unilab
-uv run --extra mujoco pyright
+uv run --extra mujoco --extra rlgames-sapg mypy src/unilab
+uv run --extra mujoco --extra rlgames-sapg pyright
 git diff --check
 make test-all
 ~~~
 
-release gate 中与 cpu_ids、worker_cpu_ids、mixed-layout 或 M0-release identity 相关的
-测试不得 skip。其他既有 optional Motrix skip 必须逐项记录原因，不能把 skip 计为 pass。
-make test-all 失败时不删测试、不改全局 tolerance、不宣称 support。
+M0-dev gate 中与 cpu_ids、worker_cpu_ids、mixed-layout 或 per-env autoreset 相关的测试
+不得 skip；这些能力必须 GREEN。其他既有 optional Motrix skip 必须逐项记录原因，不能把
+skip 计为 pass。make test-all 失败时不删测试、不改全局 tolerance、不宣称 candidate 完成。
 
 ### 8.2 Support docs/matrix
 
-在 release evidence 已提交后：
+在 M0-dev evidence 已落地并通过 focused gates 后：
 
 1. 用 uv run scripts/generate_support_matrix.py --write 刷新 generated block，不手工
    编辑 generated table；
 2. 若当前 generator 尚未表达 SAPG entrypoint，增加一个窄的
-   rlgames_sapg / SimToolReal / mujoco evidence owner 和对应 test，不能把其他算法或
-   backend 一并提升；
-3. Chinese/English installation docs 只增加正式 artifact、clean-install 和 canonical
-   platform 说明；明确 Linux/aarch64、Motrix、无 artifact、无 affinity ABI 仍 unsupported；
+   rlgames_sapg / SimToolReal / mujoco evidence owner 和对应 test；当前最高只能是
+   `Tested`，不能把其他算法或 backend 一并提升；
+3. Chinese/English installation docs 只增加当前 M0-dev Git pin、安装态、ABI 和 canonical
+   platform 说明；明确 Linux/aarch64、Motrix、无 affinity ABI 和正式 M0-release 仍是
+   unsupported/deferred；
 4. 不标记 Recommended 或 Benchmarked，除非已有明确 metadata 和提交的 benchmark
    manifest；
-5. 文档必须同时写出 M0-dev（历史 development identity）和 M0-release（当前 support
-   identity），避免读者误以为两个版本可互换。
+5. 文档必须把 M0-dev provisional 与未来 M0-release 分开写，不能把 dev identity 写成
+   正式 support，也不能暗示两个版本可互换。
 
 ### 8.3 Control-session handoff
 
@@ -541,14 +580,15 @@ make test-all 失败时不删测试、不改全局 tolerance、不宣称 support
 local gates 后交回：
 
 - exact changed-path list 和每个 child 的 RED→GREEN；
-- M0-dev/M0-release artifact filename、SHA256、source provenance；
+- M0-dev source SHA、manifest/hash、安装态和 public ABI provenance；正式 M0-release
+  artifact 标记为 deferred，不得伪造 filename/SHA256；
 - target pyproject.toml/uv.lock identity；
 - S1、12k、mixed-layout、autoreset、affinity 的命令和实际结果；
 - complete local gate 输出；
 - docs/support matrix diff；
 - 当前工作树未暂存、未提交且无残留日志/进程的证据；
-- 明确标记 remote CI: pending control-session commit 和
-  maintainer support judgment: pending。
+- 明确标记 remote CI: pending control-session commit、maintainer support judgment:
+  pending，以及 formal M0-release/artifact promotion: deferred。
 
 控制 session 提交后必须以新的 current HEAD 重跑必要 gates，并等待该 HEAD 的全部 remote
 CI 完成；旧 HEAD 的绿色结果、pending/in-progress job 或未运行的 job 都不算通过。
@@ -561,7 +601,7 @@ GREEN。不得伪造“先失败”日志。报告至少包含：
 - 失败命令、首个异常和根因；
 - 修改的唯一 owner/path；
 - 通过命令及 passed/skipped/failed/warnings；
-- artifact/lock/direct_url/hash/provenance；
+- M0-dev lock/direct_url/source hash/provenance 和安装态 ABI；
 - cold-path、backend-private、Source/sibling access、cleanup audit；
 - 未解决的 blocker 或为何没有 blocker。
 
@@ -578,14 +618,15 @@ GREEN。不得伪造“先失败”日志。报告至少包含：
 - S1/12k 只能用 fake backend、CPU、缩小 profile、关闭关键 DR/autoreset/wrench 或 skip
   才能通过；
 - 12k 真实 profile OOM、native crash、checkpoint 不完整或 cleanup 泄漏；
-- artifact 缺失、版本为 .dev0、hash/provenance 不全、不是 clean-install sdist，或
-  只能来自 dirty sibling checkout；
+- M0-dev source SHA、lock、direct_url、manifest 或安装态 ABI 不一致，或只能来自 dirty
+  sibling checkout；正式 artifact 缺失或版本仍为 .dev0 不属于当前 candidate blocker，
+  但必须在报告中标记为 deferred；
 - cpu_ids、worker_cpu_ids 或 was_autoreset property ABI 缺失/不真实；
 - 需要修改外部 MuJoCoUni、Source、vendor、Code #1-#9 owner、shared sim2sim 或新公共
   contract；
 - mixed-layout、autoreset、affinity、T0/T1/SAPG oracle 出现无法解释的 mismatch；
-- release dependency 造成无关 lock upgrade、平台 marker 漂移或 direct_url 指向 sibling；
-- required test failure、未解释 warning、release gate skip 或 make test-all failure；
+- M0-dev dependency 造成无关 lock upgrade、平台 marker 漂移或 direct_url 指向 sibling；
+- required test failure、未解释 warning、M0-dev gate skip 或 make test-all failure；
 - 文档/support matrix 会把未经 maintainer 批准的组合写成 Recommended、Benchmarked
   或跨 backend support；
 - 需要 push/PR/remote CI 才能继续，而控制 session 尚未接管。
@@ -595,15 +636,15 @@ GREEN。不得伪造“先失败”日志。报告至少包含：
 
 ## 11. 实现 session 最终报告格式
 
-所有 child 的 local gates 和 artifact 证据齐全时，报告：
+所有 child 的 local gates 和 M0-dev 证据齐全时，报告：
 
 ~~~text
-# DONE (local Code #10 candidate)
+# DONE (local Code #10 M0-dev candidate)
 
 起止 branch/HEAD：
 实际修改路径与每个 child 的 scope：
 M0-dev identity：
-M0-release artifact/version/SHA256/source provenance：
+M0-release artifact/version/SHA256/source provenance：deferred；本批不制作、不伪造
 S1 train/play 结果：
 12288/2048 结果：
 mixed-layout/autoreset/affinity 结果：
@@ -612,7 +653,7 @@ support docs/matrix 结果：
 focused/full local gates：
 cleanup/audit：
 remote CI：pending control-session commit
-maintainer support judgment：pending
+maintainer support judgment：pending；formal M0-release/artifact promotion：deferred
 ~~~
 
 如果任一停止条件触发，报告：
@@ -629,5 +670,7 @@ maintainer support judgment：pending
 未执行的后续 child：
 ~~~
 
-只有控制 session 在提交后以当前 HEAD 完成 local/remote CI，并得到 maintainer 明确
-support judgment 后，才能把总指导中的 Code #10 改为“已完成”并使用正式 support wording。
+只有控制 session 在提交后以当前 HEAD 完成 local/remote CI，才能把总指导中的 Code #10
+改为“M0-dev candidate 已完成”。得到 maintainer 明确 support judgment 并完成独立的
+M0-release artifact promotion 后，才可以使用正式 support wording；这两者不是当前
+candidate 的隐含结果。
