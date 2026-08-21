@@ -4,11 +4,11 @@
 > commit 或紧随其后的 docs commit 中更新这里的状态、commit、验证证据和已知缺口。
 > 阶段 prompt、handoff 和临时设计稿只服务当期执行，不作为长期事实来源。
 
-最后更新：2026-08-21
+最后更新：2026-08-22
 
 当前分支：feat/simtoolreal-sapg-rlgames
 
-本次整理基线：e007c3c036e14a464acef470a099a178ee4cf4c8
+本次整理基线：9da89c20bc7e4b01d881be147004338ba132e1db
 
 ## 1. 普通中文路线摘要
 
@@ -17,8 +17,9 @@
 仿写。
 
 当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产、task foundations、
-真实 MuJoCo env 和 native RL-Games production vertical slice 已经完成；Code #10 的
-M0-dev provisional 验证尚未开始，正式 release/support promotion 仍延期：
+真实 MuJoCo env、native RL-Games production vertical slice 和本地 M0-dev provisional
+candidate 已经完成；正式 release、artifact promotion、maintainer support judgment 和
+当前提交的 remote CI 仍延期：
 
 ~~~text
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
@@ -26,7 +27,7 @@ Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
 Code 8    组合真实 MuJoCo env，完成 T1                     已完成
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    已完成
-Code 10   M0-dev smoke、依赖重 pin 和 provisional gates       已规划，待实现
+Code 10   M0-dev smoke、依赖重 pin 和 provisional gates       本地 candidate 已完成；remote CI/maintainer judgment 待定
 ~~~
 
 后续不要求 IsaacSim/PhysX 与 MuJoCo 的真实轨迹、随机数、接触状态、reward curve 或训练
@@ -50,7 +51,7 @@ support 五个不同风险边界。
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
 | 8 | 真实 MuJoCo env composition、T1 | cc9a4fdea72b40716a861611cbca0fac874c7ce4 | 已完成 |
 | 9 | Source RL-Games SAPG production path | af01194e1074c9c6bc0938a66352198d5a36c12f | 已完成 |
-| 10 | M0-dev candidate、dependency lock、provisional gates | — | 已规划，待实现 |
+| 10 | M0-dev candidate、dependency lock、provisional gates | 4a66903c1b8f7d60784ada596567dec55b6fff70 | 本地 candidate 已完成；remote CI/maintainer judgment 待定 |
 
 Code #5 提交后的已记录验证：
 
@@ -103,7 +104,8 @@ Code #8 提交后的已记录验证：
   wrench handoff、engine autoreset exact-row/latch/cleanup 和 construction-failure cleanup 通过；
 - T1 独立 regeneration 的 NPZ 和 manifest 均逐字节一致；NPZ/manifest SHA256 分别为
   `228b704e0a5b8e94269ce4b4da29cff4e51bb57338390d79453fe0d921cfb760` 和
-  `6b87220134e2711939bad47d8ae64c0fa8820e5731b887c751d7646a061a5fdb`；
+  `290813961c2d2780ea9a461e9955b81813cda32536a0426360133de355c6a430`；manifest 仅更新
+  M0-dev provenance，50 个数值数组保持逐字节不变；
 - `uv lock --check`、Ruff、format check 通过，mypy 对 244 个 source files 无错误，pyright
   为 0 errors 和 3 个既有 optional Motrix import warnings；
 - cold-path/backend-private/source-access audit 和 `git diff --check` 通过，根目录没有
@@ -143,16 +145,45 @@ Code #9 提交后的已记录验证：
   sim2sim；没有运行 `make test-all`，没有进入 Code #10。
 
 以上证据证明已接受的算法/runtime、backend、task、真实 env 和 production vertical slice
-回归边界。Code #10 的执行 prompt 已写入
-`docs/simtoolreal_sapg_code10_prompt.md`，但 Code #10 尚未开始。当前仍然没有：
+回归边界。
 
-- 持续 M0-dev S1 和真实 `12288/2048` profile 证据；
-- Target 指向 rebased M0-dev SHA 的 dependency/lock 和安装态审计；
-- mixed-layout、autoreset、CPU affinity 的 M0-dev 组合回归；
-- `make test-all`、final-current-head CI 和 maintainer support judgment。
+Code #10 本地 candidate（实现 commit：`4a66903c1b8f7d60784ada596567dec55b6fff70`）的
+当前证据如下：
 
-正式 0.4.0 artifact、clean-install promotion 和正式 support wording 明确延期，不是当前
-M0-dev candidate 的前置条件。
+- 实际实现 commit scope 为 22 个 paths、628 insertions、44 deletions，包含 2 个新的
+  M0-dev manifest/组合 gate 文件；相对原 prompt 增加的全仓库 contract 修补均是 gate 失败
+  所证明的最小 owner-level 变更；
+- 10A 将 `mujoco-uni-runtime==0.4.0.dev0` 的 `pyproject.toml`、`uv.lock` 和安装态
+  固定到 `https://github.com/lemon-star608/mujoco_uni.git` 的
+  `54a2197be5b0cd65e9d71ff884d8415191925136`，source tree 为
+  `771de554330b698bc12e5110682af1d8de433ee2`；direct URL、lock、distribution 和
+  `BatchEnvPool(cpu_ids=...)`、`worker_cpu_ids()`、真实 `was_autoreset` property 一致；
+- M0-dev manifest `tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json` 的 SHA256 为
+  `abde3972cebdd0d5ef8283ad9a07822c458a2365af30654b60f55facf2fe725b`，记录外部
+  MuJoCoUni focused 26 passed/full 50 passed、rebase mapping、build provenance 和
+  `formal_release=deferred`；manifest 中 Python `3.13.15` 仅是外部构建/测试 provenance；
+- 10B 两次独立 S1 均完成 epoch 2、frame 48，native checkpoint 均为 101,989,547 bytes，
+  MP4 分别为 64,343 和 64,493 bytes；真实 `12288/2048/6` profile 完成一个有限 epoch，
+  frame 196608、checkpoint 217,698,411 bytes；checkpoint 的 actor optimizer、actor/central
+  model RMS、RNN state 非空，`env_state=None`；训练/评估目录、native scratch 和进程均清理；
+- 10C 组合 gate 为 3 passed、0 skipped，affinity gate 为 16 passed、0 skipped，覆盖
+  indexes 0/1/7 mixed visual layouts、逐环境 autoreset latch/reset isolation、显式 CPU
+  affinity 和 `cpu_ids=None` 的默认 OS scheduling；
+- 10D 在 canonical Linux x86_64/Python `3.11.15`、MuJoCo `3.10.0`、PyTorch
+  `2.7.0+cu128`、CUDA `12.8`、cuDNN `90701` 环境通过 SAPG oracle 232 passed、SimToolReal
+  104 passed、T1 golden 1 passed、runtime/affinity 18 passed、support matrix 6 passed；
+- 全量 `UNILAB_REQUIRE_SAPG=1 make test-all` 通过：`2157 passed, 51 skipped,
+  274 deselected, 1 xfailed`，另有 96 条既有 warnings；benchmark smoke 通过，两个
+  platform-optional `mlx` 入口各 1 skipped；Ruff、mypy（252 source files、0 errors）、
+  pyright（0 errors、3 个既有 optional Motrix import warnings）和 `uv lock --check` 通过；
+- 为全仓库 gate 修复的最小 owner-level contract 变更仅包括 Markdown/Hydra fence 解析、
+  playback fake-env visual-model contract、`mocap_pos` 期望和 CUDA side-stream 初始顺序；
+  没有修改 Source、vendor bytes、外部 MuJoCoUni、算法公式、Code #1-#9 数值 fixture 或
+  shared sim2sim owner。
+
+因此当前可称为 **本地 M0-dev provisional candidate 已完成**。由于本次未 push/PR，
+final-current-head remote CI 仍为 pending；正式 `0.4.0` artifact、clean-install promotion、
+maintainer support judgment 和正式 support wording 继续延期，不能由本地 gate 冒充完成。
 
 ## 3. 目标、owner 和非目标
 
@@ -578,7 +609,7 @@ license 原始 CRLF/尾空格 bytes 时不误报 whitespace；license blob 仍�
   600 steps，env/raw reward 保持 200/20/300/50/1000/0.03/0.003，只有 critic reward feature
   乘 0.01；
 - deterministic catalog 为 12 distributions × 50 = 600，topology census 为
-  box_box=250、capsule_box=300、box_only=50；Source-native 12×1 representative URDF 与
+  box_box: 250、capsule_box: 300、box_only: 50；Source-native 12×1 representative URDF 与
   Target ToolSpec 的 geometry、mass、COM、diagonal inertia 和 object scale 已比较；
 - focused tests 覆盖 non-identity canonical/backend permutation、delay、goal/keypoint、
   observation、raw reward/lifecycle、full SO(3) reset、fixed table mapping 和 wrench DR；
@@ -694,21 +725,23 @@ script、独立 CLI route、pth resolver、native player path 和一个既有col
 
 ### Code #10：M0-dev provisional validation
 
-状态：已规划，待实现。执行 prompt 为
+状态：本地 M0-dev provisional candidate 已完成；实现 commit 为
+`4a66903c1b8f7d60784ada596567dec55b6fff70`。执行 prompt 为
 docs/simtoolreal_sapg_code10_prompt.md。
 
 唯一主要结果：把已经真实验证的开发路径核验为可复验、可维护、可审查的 M0-dev
 provisional candidate；算法、task、env 和 native RL-Games owner 不在本 Code 重新设计。
 当前不升 MuJoCoUni 版本、不制作正式 sdist、不把 dev identity 写成正式 support。
 
-按 prompt 的四个 child 顺序只做：
+按 prompt 的四个 child 顺序已完成：
 
-1. 10A：把 Target pyproject/uv.lock 从旧 SHA 更新到远端可获取的 rebased M0-dev SHA，
-   并完成 provenance 和安装态审计；版本继续为 `0.4.0.dev0`；
-2. 10B：新 pin 上的 S1 finite multi-epoch train/play 和真实 12288/2048/6 profile；
-3. 10C：mixed-layout/autoreset/CPU affinity 组合近风险回归；
-4. 10D：M0-dev 组合回归、dependency/source/cold-path audit、provisional 安装文档、
-   support matrix 记录、make test-all 和控制 session handoff。
+1. 10A：把 Target `pyproject.toml`/`uv.lock` 从旧 SHA 更新到远端可获取的 rebased
+   M0-dev SHA，并完成 provenance 和安装态审计；版本继续为 `0.4.0.dev0`；
+2. 10B：在新 pin 上完成 S1 finite multi-epoch train/play 和真实 `12288/2048/6`
+   profile；
+3. 10C：完成 mixed-layout/autoreset/CPU affinity 组合近风险回归；
+4. 10D：完成 M0-dev 组合回归、dependency/source/cold-path audit、provisional 安装文档、
+   support matrix、全量 `make test-all` 和本地 handoff。
 
 当前 MuJoCoUni rebase 后的 M0-dev 已提供 `cpu_ids`、`worker_cpu_ids()` 和真实
 `was_autoreset` property；这些 ABI 必须在 10A/10C 真实 GREEN，不能 skip。MuJoCoUni owner
@@ -716,9 +749,9 @@ provisional candidate；算法、task、env 和 native RL-Games owner 不在本 
 checkout 代替已锁定的 Git SHA。正式 0.4.0 artifact、clean-install promotion、跨平台
 support 和 maintainer 产品判断作为后续独立 release 任务延期。
 
-没有 M0-dev 真实 train/play、完整测试和当前 HEAD CI 时，Code #10 的 M0-dev candidate
-保持未完成；实现 session 的 DONE 只能表示 local candidate 已交回控制 session。即使
-candidate 完成，也不能据此宣称正式 release/support。
+当前已具备 M0-dev 真实 train/play、完整本地测试和提交后的实现 commit；由于未 push/PR，
+当前 HEAD 的 remote CI 仍待后续控制流程完成。因此本节的“完成”只表示本地 provisional
+candidate，不表示正式 release 或 maintainer support。
 
 永久成本：一个固定 rebased M0-dev dependency、source/provenance manifest、provisional
 support docs 和升级复验；不新增第二套训练 runtime 或 release wrapper。
@@ -780,7 +813,7 @@ target_t1_fp32.npz
 228b704e0a5b8e94269ce4b4da29cff4e51bb57338390d79453fe0d921cfb760
 
 target_t1_manifest.json
-6b87220134e2711939bad47d8ae64c0fa8820e5731b887c751d7646a061a5fdb
+290813961c2d2780ea9a461e9955b81813cda32536a0426360133de355c6a430
 ~~~
 
 ## 11. Production adapter、config、checkpoint 和 play
@@ -876,9 +909,9 @@ source SHA 54a2197be5b0cd65e9d71ff884d8415191925136
 ~~~
 
 Code #6 的历史 pyproject/uv.lock pin 是旧 SHA `7205e070e983df90d520f0f8593853013e976746`；
-MuJoCoUni rebase 后，Code #10 需要把 Target 更新到上面的 `54a2197…` 完整 SHA。当前
-M0-dev 安装态的 `direct_url.json`、版本和 source commit 必须一致；该 identity 只用于
-provisional candidate，不是 M0-release artifact。
+Code #10 已把 Target 更新到上面的 `54a2197…` 完整 SHA。当前 M0-dev 安装态的
+`direct_url.json`、版本和 source commit 一致；该 identity 只用于 provisional candidate，
+不是 M0-release artifact。
 
 当前 M0-dev 必须提供：
 
@@ -891,11 +924,11 @@ provisional candidate，不是 M0-release artifact。
 通过；Target 只允许锁定该 Git SHA，不得依赖 dirty sibling checkout。生产默认仍显式使用
 `cpu_ids=null`，10B 另行用可用 CPU IDs 做真实 affinity contract test。
 
-2026-08-21 的控制 session 只读核验结果为 targeted 26 passed、完整 suite 50 passed，外部
+2026-08-22 的 Code #10 控制核验结果为 targeted 26 passed、完整 suite 50 passed，外部
 tracked tree 干净；`docs/unilab_extension_status.md` 以及出现时的 `MUJOCO_LOG.TXT` 是用户
-untracked 文件，不能清理。最终 `git ls-remote` 核验确认远端
-`refs/heads/feat/geom-size-pos-per-env-fields` 已指向 `54a2197…`，因此 Target 可以从正式
-HTTPS Git URL 获取该 SHA；Code #10 10A 仍必须 fresh 复核这一 provenance gate。
+untracked 文件，不能清理。`git ls-remote` 核验确认远端
+`refs/heads/feat/geom-size-pos-per-env-fields` 已指向 `54a2197…`，Target 已从正式 HTTPS
+Git URL 获取该 SHA；安装态、direct URL 和 ABI gate 均通过。
 
 M0-dev candidate 可以在不升版本的前提下声称“CPU affinity ABI 已验证”，但不能把它写成
 正式跨平台 support；Linux/aarch64、无 ABI 安装态和未核验 platform 继续 unsupported。
@@ -971,7 +1004,7 @@ Code #9：
 - 6-env 和 N 不等于 6 player；
 - real small train/play vertical slice。
 
-Code #10：
+Code #10（本地 candidate 已完成；remote CI pending）：
 
 - M0-dev S1 finite multi-epoch train/play；
 - 12288/2048/6 真实 profile；
@@ -1028,7 +1061,7 @@ production path 暴露前和最终 PR 前必须运行 make test-all。最终 PR 
 
 ## 15. 完成和 support wording
 
-当前 Code #10 M0-dev candidate 只有在以下事实全部有当前证据时完成：
+当前 Code #10 的本地 M0-dev provisional candidate 已满足以下事实：
 
 - Code #1-#10 都有范围正确的代码 commit；
 - Source/vendor identity 和 frozen oracles 无未声明漂移；
@@ -1036,12 +1069,13 @@ production path 暴露前和最终 PR 前必须运行 make test-all。最终 PR 
 - 真实 M0-dev train/play 和 12288/2048 profile 通过；
 - Target 锁定 rebased M0-dev SHA，mixed-layout、autoreset 和 affinity ABI 均真实通过；
 - make test-all 通过；
-- final-current-head CI 全部通过；
 - handoff 明确记录正式 M0-release 和 maintainer support judgment 尚未完成。
 
-上述完成只表示这条迁移的 M0-dev provisional candidate 完成。正式 support 还要求后续
-独立完成 clean-install M0-release artifact、release provenance 和 maintainer 明确批准；
-这些延期条件不能反向阻塞当前 candidate，也不能被当前 candidate 冒充为已完成。
+本次没有 push/PR，因此 final-current-head remote CI 尚未执行；它是后续提交/发布流程的
+必要 gate，不影响上述 local candidate 证据，但在 CI 完成前不能宣称当前 HEAD 的远程验收
+已完成。正式 support 还要求后续独立完成 clean-install M0-release artifact、release
+provenance 和 maintainer 明确批准；这些延期条件不能反向阻塞当前 candidate，也不能被
+当前 candidate 冒充为已完成。
 
 最终允许的准确表述：
 
