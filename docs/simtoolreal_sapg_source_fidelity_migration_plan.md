@@ -16,15 +16,16 @@
 原生 RL-Games SAPG 训练和播放，而不是继续维护 UniLab 中不完全等价的 RSL-RL SAPG
 仿写。
 
-当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产、task foundations
-和真实 MuJoCo env 已经完成；native RL-Games training pipeline 尚未接通：
+当前算法迁移、算法回归基线、MuJoCo backend public contracts、训练资产、task foundations、
+真实 MuJoCo env 和 native RL-Games production vertical slice 已经完成；正式依赖和 support
+promotion 尚未开始：
 
 ~~~text
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
 Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
 Code 8    组合真实 MuJoCo env，完成 T1                     已完成
-Code 9    接 native Runner、adapter、tracker、pth 和 CLI    已规划，待实现
+Code 9    接 native Runner、adapter、tracker、pth 和 CLI    已完成
 Code 10   真实 smoke、正式依赖和 support promotion         未开始
 ~~~
 
@@ -48,7 +49,7 @@ support 五个不同风险边界。
 | 6 | MuJoCo backend public contracts | 31583cae7a4084258d28e330ed301c8dc4240c38 | 已完成 |
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
 | 8 | 真实 MuJoCo env composition、T1 | cc9a4fdea72b40716a861611cbca0fac874c7ce4 | 已完成 |
-| 9 | Source RL-Games SAPG production path | — | 已规划，待实现 |
+| 9 | Source RL-Games SAPG production path | af01194e1074c9c6bc0938a66352198d5a36c12f | 已完成 |
 | 10 | release、dependency lock、support promotion | — | 未开始 |
 
 Code #5 提交后的已记录验证：
@@ -109,16 +110,43 @@ Code #8 提交后的已记录验证：
   `MUJOCO_LOG.TXT`；没有修改 backend、Source、vendor、MuJoCoUni、dependency 或 conf，
   没有运行 `make test-all`，没有进入 Code #9。
 
-以上证据证明已接受的算法/runtime、backend、task 和真实 env 回归边界。当前仍然没有：
+Code #9 提交后的已记录验证：
 
-- production RlGamesNpEnvAdapter；
-- production Hydra SAPG owner；
-- native Runner train/play 入口；
-- ExperimentTracker observer bridge；
-- production pth resolver；
-- SAPG train/eval CLI；
-- 真实 MuJoCo train/play smoke；
-- M0-release 和正式 support。
+- 代码 commit：af01194e1074c9c6bc0938a66352198d5a36c12f；实际 scope 为 32 paths、
+  2913 insertions、18 deletions，其中包含 generated `uv.lock`，净手写约 2.85k 行；
+- root `rlgames-sapg` optional extra 精确安装
+  `unilab-simtoolreal-rl-games==1.6.1+simtoolreal.2a991753.compat2`，editable source 指向仓库内
+  vendor；base+mujoco exact sync 下 integration package 可 import，但 distribution 和
+  `rl_games` 均不存在；Linux/aarch64 和错误 identity fail closed；
+- `conf/rlgames_sapg` 的 base/12k owners 分别固定 `24576/4096/6` 和 `12288/2048/6`，
+  Source-native R2 field-by-field、raw reward × native 0.01、unsupported config preflight 通过；
+- `RlGamesNpEnvAdapter` 锁定 first-reset、`obs/states`、一次 action transfer、
+  done/timeout/device/dtype/shape/finite 和 `env_state=None` contract；唯一 train 调用链为
+  `Runner.load -> set_vec_env -> run_train -> A2CAgent.train`，没有第二套 rollout/update；
+- `ExperimentTrackerObserver`、native run directory、trusted `.pth` resolver、
+  resume/weights boundary 和 `PpoPlayerContinuous` bridge 已接通；W&B 仍只有
+  `ExperimentTracker` 一个 lifecycle owner，不声明 env/RNG/trajectory bit-exact resume；
+- MuJoCo cold-path visual materializer 已按 assigned physics model 同步 contact topology；真实
+  indexes 0/1/7 均保留完整 `36/35/29/40` visual model，并覆盖 box_box、capsule_box 和
+  box_only；
+- 完整 SAPG oracle：186 passed、11 条既有 AMP deprecation warnings；Code #9 focused：
+  117 passed、0 skipped；real N=6 vertical slice：1 passed、2 条既有 AMP warnings；vendor：
+  37 passed，72+7 audit 通过；Code #8：101 passed；邻近 backend：52 passed、7 deselected、
+  5 条既有 XML/Gymnasium warnings；
+- 真实 CLI train/eval 产生 101,989,547-byte native checkpoint 和 45,351-byte MP4；checkpoint
+  为 outer rank 0、epoch 1、frame 24、非空 actor/central optimizer state、`env_state=None`；
+- Ruff、format check、`uv lock --check` 通过，mypy 对 252 个 source files 无错误，pyright 为
+  0 errors 和 3 个既有 optional Motrix import warnings；cold-path/private/source-access、
+  single-W&B、no-second-loop 和 cleanup audit 通过；
+- 没有修改 Source、donor、vendor bytes、Code #1-#8 fixtures、env/task formulas 或 shared
+  sim2sim；没有运行 `make test-all`，没有进入 Code #10。
+
+以上证据证明已接受的算法/runtime、backend、task、真实 env 和 production vertical slice
+回归边界。当前仍然没有：
+
+- 持续 M0-dev S1 和真实 `12288/2048` profile 证据；
+- clean-install M0-release artifact 和正式 dependency promotion；
+- `make test-all`、final-current-head CI 和 maintainer support judgment。
 
 ## 3. 目标、owner 和非目标
 
@@ -595,10 +623,9 @@ registry/construction、8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset i
 
 ### Code #9：Source RL-Games SAPG production path
 
-状态：已规划，待实现。执行 prompt 为
-`docs/simtoolreal_sapg_code9_prompt.md`；该 prompt 已把本 Code 拆为 9A-9D，并固定 dependency、
-config、adapter/Runner、tracker/checkpoint、native player/CLI 和真实 vertical slice 的顺序与
-停止条件。
+状态：已完成。代码 commit 为 af01194e1074c9c6bc0938a66352198d5a36c12f。9A dependency/
+config、9B adapter/Runner、9C tracker/checkpoint 和 9D player/CLI/visual/real slice 均已落地。
+执行 prompt 为 `docs/simtoolreal_sapg_code9_prompt.md`。
 
 Phase 0 用 `uv run --with-editable` 临时加载 vendor 时，overlay 会独立解析 vendor 的
 `torch==2.7.0`，必须同时显式增加 `--with 'torch==2.7.0+cu128'` 和
@@ -608,7 +635,7 @@ Phase 0 用 `uv run --with-editable` 临时加载 vendor 时，overlay 会独立
 
 唯一主要结果：建立一个可 train、resume、weights-load 和 play 的 native vertical slice。
 
-只做：
+已完成：
 
 - 修正Code #7增加KUKA license whitespace attribute后，既有vendor audit仍锁旧单行内容的
   compatibility drift；不修改`.gitattributes`或vendor bytes；
@@ -626,7 +653,23 @@ Phase 0 用 `uv run --with-editable` 临时加载 vendor 时，overlay 会独立
   size-only materializer会让capsule_box/box_only复用tool 0 topology，9D在既有MuJoCo cold-path
   playback helper内做generic topology同步，不新增backend public contract，也不改env/T1。
 
-不做：
+实际 scope 为 32 paths、2913 insertions、18 deletions，包含 generated `uv.lock`；净手写约
+2.85k 行，没有单个 production 文件达到 800 行。主要 production owners 为 8 个
+`rlgames_sapg` modules、3 个 Hydra YAML、一个 325 行 training script、CLI/completion route
+和既有 MuJoCo cold-path playback helper。
+
+已锁定的关键 contract：
+
+- base install 不携带 vendor runtime，选择 extra 后只接受仓库内 exact editable identity；
+- native config 直接由 Hydra compose，不在 Python 维护第二份算法翻译；
+- adapter 只做同步 ABI 转换，native Runner/A2CAgent 独占 rollout/update/checkpoint；
+- `.pth` 只从可信 task root 解析，resume 与 weights 分离，`env_state=None` 边界显式；
+- player 使用 native normalizer、RNN、coefficient routing、action 和 done reset；UniLab 只保留
+  env、tracker、camera 和 video shell；
+- assigned visual playback 保持 40 meshes，并按真实 tool variant 同步 primitive contact
+  topology；physics pool 仍保持 Code #8 的 19-mesh `discardvisual=true` contract。
+
+明确仍未做：
 
 - 新 rollout loop；
 - Python 层算法配置翻译；
@@ -634,9 +677,7 @@ Phase 0 用 `uv run --with-editable` 临时加载 vendor 时，overlay 会独立
 - RSL-RL checkpoint schema conversion；
 - async/distributed/export；
 - 反向修改 vendor 或 rebaseline Code #1-#5。
-
-预计规模：约 32 paths、3-4k production/test LOC 加 generated lock；每个 child 约 15 paths
-以内、约 800 行以内净手写 adaptation，并在进入下一 child 前独立 GREEN。
+- 持续 S1、真实运行 12k profile、M0-release、完整 suite、CI 或 support promotion。
 
 永久成本：8 个以内职责单一的 integration modules、3 个 Hydra owners、一个薄 training
 script、独立 CLI route、pth resolver、native player path 和一个既有cold-path visual helper
