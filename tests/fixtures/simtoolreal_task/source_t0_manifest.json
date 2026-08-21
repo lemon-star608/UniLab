@@ -1,0 +1,793 @@
+{
+  "arrays": [
+    {
+      "dtype": "int64",
+      "name": "perm_canon_to_backend",
+      "sha256": "9e3cc9c813ae3a13021a6a3618a224cef1cc6299f70d1d1b06594ca92c9f2881",
+      "shape": [
+        29
+      ]
+    },
+    {
+      "dtype": "int64",
+      "name": "perm_backend_to_canon",
+      "sha256": "0bab3af0fbea5c5371bf2dd35d085cb62b6eea6ffa505c905d762955b4210b32",
+      "shape": [
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "actions_canonical",
+      "sha256": "2749ba69e69cb02675d828d9a50f140dbcb3b3a8177ecdce25eb27c45453c4f6",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "action_queue_initial",
+      "sha256": "0863845d0d1b6187a1c1c0703ded7332830bb1065e2a4f24c22189723b71d4dc",
+      "shape": [
+        6,
+        3,
+        29
+      ]
+    },
+    {
+      "dtype": "int64",
+      "name": "action_delay_indices",
+      "sha256": "2ecda99caa58af09454a205fdc3a9b0e15e401e033b83803225bda737fc6257b",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "action_target_backend",
+      "sha256": "4b3dd23ee848c1e55a494c13990b44c456934cba289677781e23273c6fda1ac8",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "goal_pos",
+      "sha256": "62c545c4dae21227b1b462e4f7e78b93f4bd1218b3761e4ab28998503cc598c8",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "goal_quat_wxyz",
+      "sha256": "67aed3ce6ea02e241b3e5fee1b017c12c22e46e9d55d5c1c90e7958ace52e4ae",
+      "shape": [
+        6,
+        4
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_obs_policy",
+      "sha256": "b8d27d438269333c47b5a99de74a9fcbf056c5fd8842631f4990788af1810ddb",
+      "shape": [
+        6,
+        140
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_critic",
+      "sha256": "a0df84146b57a8775793c4938bcb727583bd9f9b6aed85a9ae5077b5356e7e10",
+      "shape": [
+        6,
+        162
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reward",
+      "sha256": "d2b7c053a32ec962254fdb23ae0703d215cff935004e70985676791b49242ad7",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reward_terms",
+      "sha256": "dd1a375d70bbca831d3b4ddccd612329527fed9f6639bba1a1719fa77bf54e39",
+      "shape": [
+        6,
+        8
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_terminated",
+      "sha256": "1a71797cab8ed23c72233b7706b166a33049e4e87dfbc55b9e252f9c1843eca6",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_truncated",
+      "sha256": "b0f66adc83641586656866813fd9dd0b8ebb63796075661ba45d1aa8089e1d44",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_goal_mask",
+      "sha256": "b0f66adc83641586656866813fd9dd0b8ebb63796075661ba45d1aa8089e1d44",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_reset_mask",
+      "sha256": "1a71797cab8ed23c72233b7706b166a33049e4e87dfbc55b9e252f9c1843eca6",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_position_input",
+      "sha256": "a8cb2bca91f296bd7ed730690efa979d903d4426a3c4d7552440a4a87bc87b72",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_quaternion_wxyz_input",
+      "sha256": "8969cdccc06ee599fd443dc5f2fce2924f07e1e626e96997313882c7841c4d10",
+      "shape": [
+        6,
+        4
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_linear_velocity_input",
+      "sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_angular_velocity_input",
+      "sha256": "834a709ba2534ebe3ee1397fd4f7bd288b2acc1d20a08d6c862dcd99b6f04400",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "joint_position_input",
+      "sha256": "030dd256c2a1dda892b0e57157ec52f9ae5fd1e054d0c66380fae1cb6c09c477",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "joint_velocity_input",
+      "sha256": "030dd256c2a1dda892b0e57157ec52f9ae5fd1e054d0c66380fae1cb6c09c477",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "previous_targets_input",
+      "sha256": "4b3dd23ee848c1e55a494c13990b44c456934cba289677781e23273c6fda1ac8",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_scale_phi_input",
+      "sha256": "cb20f90237d216aff937f8753f7070e5fde514a80130f10572838485729343eb",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "keypoint_offsets_input",
+      "sha256": "c817830e8dfb2f748b083226fb6716036766b1524a487ccf33307838c81c3ab9",
+      "shape": [
+        6,
+        4,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "reward_object_init_z_input",
+      "sha256": "9d908ecfb6b256def8b49a7c504e6c889c4b0e41fe6ce3e01863dd7b61a20aa0",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_fingertip_distance",
+      "sha256": "6a042fdce47c3a21a8bb54d49bc18e6b1b8d5dc415e49d387f3ee0ea2c271e07",
+      "shape": [
+        6,
+        5
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_keypoint_max_distance",
+      "sha256": "baa9c13214937854b8fcb7137a4412d67079de5916c1e7e31ef84a90acb3614c",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_near_goal_tracker",
+      "sha256": "b0f66adc83641586656866813fd9dd0b8ebb63796075661ba45d1aa8089e1d44",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "int64",
+      "name": "source_near_goal_steps_tracker",
+      "sha256": "17b0761f87b081d5cf10757ccc89f12be355c70e2e29df288b65b30710dcbcd1",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_is_success_tracker",
+      "sha256": "b0f66adc83641586656866813fd9dd0b8ebb63796075661ba45d1aa8089e1d44",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_lifted_tracker",
+      "sha256": "cdd527f2f138ddd775902d637b6e2cf57140b556aeb4fd7e39d9652043735da5",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_keypoint_dstar",
+      "sha256": "baa9c13214937854b8fcb7137a4412d67079de5916c1e7e31ef84a90acb3614c",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_fingertip_dstar",
+      "sha256": "6a042fdce47c3a21a8bb54d49bc18e6b1b8d5dc415e49d387f3ee0ea2c271e07",
+      "shape": [
+        6,
+        5
+      ]
+    },
+    {
+      "dtype": "int64",
+      "name": "source_success_tracker",
+      "sha256": "741b91ec0d673abab47b5cd17a5be0b3c23ec10a40aa7eae139fd61842fe1088",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "reset_joint_uniform_draws",
+      "sha256": "5a3e381cfbb607a9dc66a849c9d2d3deee15c8f6cd1c2c06214c69ebeaad8905",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "reset_joint_velocity_draws",
+      "sha256": "9e92acfbd1e6e178b15df01082f363d3c1ebe7cc9cbaa00833be4988f6e0e8b7",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "reset_object_uniform_draws",
+      "sha256": "734a01e8a99f23f42cc5cf0638bbb7299bb36f2098b32ca3d6b6cff9a0782cdf",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "reset_orientation_uniform_draws",
+      "sha256": "289c2575dc499545f9bfb2a5459c54a4e016224fc1ed1a29c07ae060b90caa26",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "reset_orientation_wxyz_draws",
+      "sha256": "ca9f54c18dd62acb69fddfcc6caab5e67b019e9d490ed1ae8d9685491001f830",
+      "shape": [
+        6,
+        4
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reset_qpos",
+      "sha256": "e975dba655cbe9697f1e396ca43c895e11c84ed31a8ba90ea81670660c382367",
+      "shape": [
+        6,
+        36
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reset_qvel",
+      "sha256": "012fb171bd5036aa628c1ebc176fc918dc7ba65829681bfe0f630d62a88a51ef",
+      "shape": [
+        6,
+        35
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reset_goal_pose",
+      "sha256": "5fefa29d60d652dd44721f306b95f43ad3d3c684665c6d00f754fc920ec06da5",
+      "shape": [
+        6,
+        7
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reset_force_prob",
+      "sha256": "0a5470a48a1c3b2c3e8f5f7ff505a3f7b79f5960e8b74ddc823b5e5b93348a70",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reset_torque_prob",
+      "sha256": "fef3363163f3919ca95354efde6782547863ba1886283d29aa2449df92fe86d2",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_reset_scale_multiplier",
+      "sha256": "727def7a81a965027dbd7e3eba445cc689c6cd0b9bd63834bd71cf3ddeb8886f",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "wrench_force_uniform_draws",
+      "sha256": "09c1572cfb9d29816be5343bf028cb45097509ba70710322847890438ff2612f",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "wrench_torque_uniform_draws",
+      "sha256": "59600b3d89294aa53c8de466545e867b63231f668a5134dd118c5578dd2f0cee",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "wrench_force_normal_draws",
+      "sha256": "734a01e8a99f23f42cc5cf0638bbb7299bb36f2098b32ca3d6b6cff9a0782cdf",
+      "shape": [
+        6,
+        1,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "wrench_torque_normal_draws",
+      "sha256": "5e51bd75d097525721502b4c33ab2fcade4aab7a5b6e70234dd734319f390bee",
+      "shape": [
+        6,
+        1,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "wrench_object_mass",
+      "sha256": "49af06768172abadb99012aff79471641e5d43d0ae1e17989c1f3bf1b9b345ea",
+      "shape": [
+        6,
+        1
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "wrench_lifted_previous",
+      "sha256": "e79629c31f543363ae212198506ffa0f8d2cd28e05e16a7412f2258f9251f0c9",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_wrench_force",
+      "sha256": "5ccfe9dbdac0a6ef51d75832856cd8e9d5ba50ac8a7041ae780e1d5a4e49c5fe",
+      "shape": [
+        6,
+        1,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_wrench_torque",
+      "sha256": "996d0b5974e82809d1355a644d8b98d7f762c5ca6ee2e42a03bd63833bd8b6ed",
+      "shape": [
+        6,
+        1,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "explicit_goal_position_uniform",
+      "sha256": "5325a317606c48a31713eab3701d890c9919720aafdbdb54943544d07dd0d61e",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "explicit_orientation_u1",
+      "sha256": "013b23c4e2ecadb444c56a393255c643cd88dd7260181eb39e2d9e8c7acdaace",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "explicit_orientation_u2",
+      "sha256": "44f3374a932e433126c31632d351207a46cd7c3e248fce851f46c5fc741c9ed6",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_state_queue_initial",
+      "sha256": "d21a685863861625d96fb3f31e73e6215b7b7d7d59415dd0f677591a09bc1a7a",
+      "shape": [
+        6,
+        3,
+        13
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "obs_queue_initial",
+      "sha256": "c430817b297fa4fe7df3d977bb826897977f00701b47a1bc7c0310c221118310",
+      "shape": [
+        6,
+        3,
+        140
+      ]
+    },
+    {
+      "dtype": "int64",
+      "name": "object_state_delay_indices",
+      "sha256": "8a813d53c6ae983e366160c0ded43103f5639df9d8c1017bb09344e77c00a891",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "int64",
+      "name": "obs_delay_indices",
+      "sha256": "2ecda99caa58af09454a205fdc3a9b0e15e401e033b83803225bda737fc6257b",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_position_normal_draws",
+      "sha256": "734a01e8a99f23f42cc5cf0638bbb7299bb36f2098b32ca3d6b6cff9a0782cdf",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_quat_axis_normal_draws",
+      "sha256": "4cc7baf7360f75ebb776d2cf4d8d67195af287cc8de54333821a76d8b6e5269d",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "object_quat_angle_degree_draws",
+      "sha256": "18bdb4d6e85b8f69f5c4064f06bfd9a061f560db2b76be3ab87a723d9f726129",
+      "shape": [
+        6
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "joint_velocity_normal_draws",
+      "sha256": "2749ba69e69cb02675d828d9a50f140dbcb3b3a8177ecdce25eb27c45453c4f6",
+      "shape": [
+        6,
+        29
+      ]
+    },
+    {
+      "dtype": "int8",
+      "name": "source_tool_authored_shape",
+      "sha256": "04b685d20023e3116397c5bcf945c18aa9d318bbb21c47817e29dd1f49b0ca5c",
+      "shape": [
+        12
+      ]
+    },
+    {
+      "dtype": "bool",
+      "name": "source_tool_has_head",
+      "sha256": "573dcf77c369f92b0ca597651081ab338a31b4d46d2b69352b8be7b4b14b82e2",
+      "shape": [
+        12
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_handle_size_full",
+      "sha256": "e8c7303710539cbd609b537cb2dfc45a512f21bf65c6f801dde278383d7bc0c1",
+      "shape": [
+        12,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_head_size_full",
+      "sha256": "a7a6d1c6a076aabaa96cb0407c522215931f2abc279af8e9a5ad8e76c33c28a2",
+      "shape": [
+        12,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_head_pos",
+      "sha256": "60fa053d3c5a166bb94d902bdc22dfbd3854da4b3da794ec4054a1c413199656",
+      "shape": [
+        12,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_mass",
+      "sha256": "c8dd79c030f6482d62a8c3264aae492dc3210d38235faf0973c92e7e64010a56",
+      "shape": [
+        12
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_com",
+      "sha256": "3c411f63a11a8b4574bdbe39e1806c3b7b3f1351eaebf74953facf52835dc528",
+      "shape": [
+        12,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_diaginertia",
+      "sha256": "db7be63b3170583374a8e7259062910f46d447611ed39ba60b25323f36f202fd",
+      "shape": [
+        12,
+        3
+      ]
+    },
+    {
+      "dtype": "float32",
+      "name": "source_tool_object_scale",
+      "sha256": "07efad5c0c1d3e5cdf9a31392034c5ecaef0f8ad326ad61d6c308be2f2100b57",
+      "shape": [
+        12,
+        3
+      ]
+    }
+  ],
+  "canonical_generation_command": "uv run scripts/generate_simtoolreal_task_t0_fixture.py --source /home/user/ws/lemon/simtoolreal --output tests/fixtures/simtoolreal_task --source-only",
+  "cases": {
+    "coverage": [
+      "action-delay",
+      "goal-keypoint",
+      "observation-delay-noise",
+      "raw-reward-trackers",
+      "termination",
+      "source-random-reset",
+      "wrench-dr",
+      "tool-distribution-spec"
+    ],
+    "device": "cpu",
+    "dtype": "float32",
+    "n": 6,
+    "names": [
+      "case_0",
+      "case_1",
+      "case_2",
+      "case_3",
+      "case_4",
+      "case_5"
+    ],
+    "seed": 0
+  },
+  "config": {
+    "action_dim": 29,
+    "actor_obs_dim": 140,
+    "critic_obs_dim": 162,
+    "ctrl_dt": 0.016666666666666666,
+    "raw_reward_scales": [
+      200.0,
+      20.0,
+      300.0,
+      50.0,
+      1000.0,
+      0.03,
+      0.003
+    ],
+    "sim_dt": 0.008333333333333333,
+    "source_tool_pool_per_distribution": 100,
+    "target_tool_pool_per_distribution": 50,
+    "tool_distribution_count": 12
+  },
+  "discrete_exact_fields": [
+    "perm_canon_to_backend",
+    "perm_backend_to_canon",
+    "action_delay_indices",
+    "source_terminated",
+    "source_truncated",
+    "source_goal_mask",
+    "source_reset_mask",
+    "source_near_goal_tracker",
+    "source_near_goal_steps_tracker",
+    "source_is_success_tracker",
+    "source_lifted_tracker",
+    "source_success_tracker",
+    "wrench_lifted_previous",
+    "object_state_delay_indices",
+    "obs_delay_indices",
+    "source_tool_authored_shape",
+    "source_tool_has_head"
+  ],
+  "fixture": {
+    "canonical_payload_sha256": "b595ee6d2d8902fd3a197415a599362b62d4fd46b0fbc5d266aa950815fa2a9a",
+    "filename": "source_t0_fp32.npz",
+    "sha256": "5393583ed7a424910b24622867785e6d6431e29570da997a8064f654ec70624d"
+  },
+  "float_tolerance": {
+    "atol": 1e-06,
+    "rtol": 1e-05
+  },
+  "generation_mode": "source-only",
+  "loaded_source_modules": [
+    {
+      "blob": "17da0abbc42b67447019dfa806b825ee0d7bbc6c",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/action_utils.py",
+      "sha256": "2e38294d4555062c6a022c46d1d9cd48b4074df4c80c0adc0b2006b7bed723d6"
+    },
+    {
+      "blob": "73a091e4a5dbb7c478dd3f5b36a8f942bb6940f7",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/goal_sampling.py",
+      "sha256": "26c64f1542bf5221d8ebd0b172605b23982a9dddda91ea509eab2397a9c188f2"
+    },
+    {
+      "blob": "ffd8ff96fc3960af658ac7d76cd43b57552b6f72",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/obs_utils.py",
+      "sha256": "fdc8266e79bc20f1a90d18a082460eb0969a19a54af277bb0e9919307b6f58b1"
+    },
+    {
+      "blob": "f8c0ea5c7d64efa1e702a3b458c7a44294400743",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/reward_utils.py",
+      "sha256": "ec2cb758f5ebd2791aee7356111a0c2e28abbeca801e942b3cbee29848c78205"
+    },
+    {
+      "blob": "310bd76004bf21a9a600d66ab1e5a56fa3de4b22",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/reset_utils.py",
+      "sha256": "49cab1e24105dcd0822891c2d90a034fffb9c9e40e811fec050dc0d63fbef79f"
+    },
+    {
+      "blob": "4960d133d44a630a13fbe3aeb0d29f5dff5c508f",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/termination_utils.py",
+      "sha256": "19f161e890f84f389856223be83550533e26e9ae2abb736ac840d71c10b62075"
+    },
+    {
+      "blob": "015471e5f5ddab3438efe2d203e9ce062466353f",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/object_size_distributions.py",
+      "sha256": "8ed5ce12ca48be5245514e1c4c85a2cebdcf3aa149b64fa0bdc5af1416f459ef"
+    },
+    {
+      "blob": "73e2129fd21186061f8a69e8370d736d75523547",
+      "path": "isaacsimenvs/tasks/simtoolreal/utils/generate_objects.py",
+      "sha256": "f176869ed6c4cd36a93019643ea448ce238dcd931df6b80243c1678f22c46b4c"
+    }
+  ],
+  "mapping": {
+    "observation_key": "policy -> obs",
+    "table": "Source movable table-height sample -> Target fixed reference, z range 0.0",
+    "tool_pool": "Source-native 12x1 distribution representatives validate Target ToolSpec math; production mapping is 12x100 Source -> 12x50 Target"
+  },
+  "ordinary_pytest_regenerates": false,
+  "primitive_boundary": "Explicit uniform/orientation draws are injected; Torch and NumPy RNG state/sequence parity is not claimed.",
+  "schema_version": 1,
+  "source": {
+    "head": "2a9917533bfea70419ed2667a511d7238e5b3abc",
+    "path": "/home/user/ws/lemon/simtoolreal",
+    "task_owner_blob": "6469d46867081b70edaa589dcb31c7090b64d45e",
+    "task_owner_path": "isaacsimenvs/cfg/task/SimToolReal.yaml",
+    "task_owner_sha256": "9d2bf514f75cc8c72b20da1e8ec971163bbd4cbdf6fc74812aa4a509340acb5e"
+  },
+  "stub": {
+    "path": "tests/envs/manipulation/simtoolreal/source_t0_harness.py",
+    "restriction": "quaternion math only; no task formulas or IsaacLab installation",
+    "sha256": "201994fa1c72da18d52137e72a436a0bca977162eea0425b36f544bbd82f967a",
+    "symbols": [
+      "convert_quat",
+      "quat_apply",
+      "quat_from_angle_axis",
+      "quat_mul",
+      "random_orientation"
+    ]
+  }
+}
