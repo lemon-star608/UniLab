@@ -454,7 +454,9 @@ feat(backend): add SimToolReal MuJoCo runtime contracts
 
 只做：
 
-- 42 个 mesh、2 个生产 XML；
+- 40 个由生产训练 XML 实际引用的 mesh、2 个生产 XML；其中 16 个 KUKA
+  collision/visual mesh 和 24 个 Sharpa hand mesh，明确不复制未引用的
+  `left_hand_C_MC_visual_.STL` 与 `left_thumb_MC_modified.STL`；
 - LICENSE.simtoolreal、LICENSE.kuka_iiwa 和 ASSET_PROVENANCE；
 - 约 14 个 task modules；
 - action、delay、goal、observation、reward、termination、reset、DR primitives；
@@ -470,7 +472,7 @@ feat(backend): add SimToolReal MuJoCo runtime contracts
 - donor 的 collision research、viewer、DexToolBench 或 Motrix；
 - 把 task keyframe 放进 robot.xml。
 
-预计规模：机械迁移 42 meshes、2 XML、约 7-8k donor LOC；手写 provenance/adaptation
+预计规模：机械迁移 40 meshes、2 XML、约 7-8k donor LOC；手写 provenance/adaptation
 约 650-1000 行。
 
 永久成本：约 15 个 task modules、assets/licenses 和一个 T0 golden。
