@@ -16,11 +16,12 @@
 原生 RL-Games SAPG 训练和播放，而不是继续维护 UniLab 中不完全等价的 RSL-RL SAPG
 仿写。
 
-当前算法迁移和算法回归基线已经完成，真实 UniLab training pipeline 尚未接通：
+当前算法迁移、算法回归基线和 MuJoCo backend public contracts 已经完成，真实 UniLab
+task/env/training pipeline 尚未接通：
 
 ~~~text
 Code 1-5  固定并验证 Source SAPG runtime                 已完成
-Code 6    补齐 MuJoCo backend public contracts            未开始
+Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          未开始
 Code 8    组合真实 MuJoCo env，完成 T1                     未开始
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    未开始
@@ -44,7 +45,7 @@ support 五个不同风险边界。
 | 3 | rollout、GAE、augmentation、shuffle、RNG oracle | 3a712a97ff43563225d657de0b5181a34f4e0974 | 已完成 |
 | 4 | update、AMP、optimizer、GradScaler oracle | 2e1c7874d4a550a63834325b6a9a8b078304ba6a | 已完成 |
 | 5 | checkpoint、resume boundary、player oracle | 6e1087f62cd17d196d67ccbd4ea880d0341cf6b5 | 已完成 |
-| 6 | MuJoCo backend public contracts | — | 未开始，等待本批执行确认 |
+| 6 | MuJoCo backend public contracts | 31583cae7a4084258d28e330ed301c8dc4240c38 | 已完成 |
 | 7 | assets、task foundations、T0 | — | 未开始 |
 | 8 | 真实 MuJoCo env composition、T1 | — | 未开始 |
 | 9 | Source RL-Games SAPG production path | — | 未开始 |
@@ -60,6 +61,19 @@ Code #5 提交后的已记录验证：
 - required SAPG tests：0 skip；
 - Code #3-#5 没有修改 Source、vendored runtime 或生产 training runtime；
 - 当前 oracle-only 阶段没有运行 make test-all。
+
+Code #6 提交后的已记录验证：
+
+- 代码 commit：31583cae7a4084258d28e330ed301c8dc4240c38；
+- focused backend gate：24 passed、0 skipped；
+- existing source-model slow regressions：2 passed、0 skipped；
+- 邻近 backend regressions：65 passed、11 skipped，skip 全部来自未安装的 optional Motrix；
+- 完整 non-slow `make test`：1784 passed、60 skipped、273 deselected、1 xfailed、0 failed、
+  85 个已记录的 Gymnasium/XML/ONNX warnings；
+- `make check`：Ruff 通过，mypy 对 229 个 source files 无错误，pyright 为 0 errors 和
+  3 个既有 optional Motrix import warnings；
+- `uv lock --check`、`git diff --check` 和 post-commit focused rerun 通过；
+- 根目录没有 `MUJOCO_LOG.TXT`；没有运行 `make test-all`，没有进入 Code #7。
 
 以上证据只证明已接受的算法/runtime 回归边界。当前仍然没有：
 
@@ -380,6 +394,14 @@ Git 工作树文件的外层 anchor。
 
 唯一主要结果：让 SimToolReal 所需的 backend 能力成为 SimBackend public contract。
 
+状态与代码提交：
+
+~~~text
+已完成
+31583cae7a4084258d28e330ed301c8dc4240c38
+feat(backend): add SimToolReal MuJoCo runtime contracts
+~~~
+
 只做：
 
 - ModelVariantSpec.source_model_file 和 source model direct compile；
@@ -400,6 +422,30 @@ Git 工作树文件的外层 anchor。
 预计规模：约 11 paths、约 800 行手写实现/测试加 generated lock。
 
 永久成本：3 个 public backend contracts 和 M0-dev/M0-release provenance。
+
+实际 scope 为 11 paths、504 insertions、13 deletions。原 prompt 的 10 个允许路径全部按
+计划落地；第 11 个路径 `tests/base/test_mujoco_batch_env_randomization.py` 经 maintainer
+明确授权，只把 M0-dev 新增的 `geom_size` 和 `geom_pos` 纳入安装态 compatibility 断言。
+
+已完成的 contract 和证据：
+
+- `ModelVariantSpec.source_model_file` 在 materialization 冷路径直接编译完整 source model，
+  并保留 geom-size-only 原路径；
+- 12 个独立 source XML 使用 `model_assignments=np.arange(12)` 真实 materialize 和 step，
+  index 7 的 dominant layout 在 `ngeom/nbvh/nC/nbuffer` 上支配 small variant；
+- `SimBackend.apply_body_wrench` 由 MuJoCo 按 env row、body 6D block 累加 world-frame
+  force/torque，并对两类 shape mismatch fail closed；
+- `SimBackend.get_step_autoreset_mask` 区分 unknown 与 no-reset，MuJoCo direct path 和
+  pre-step-control 多 substep path 都读取 public `BatchEnvPool.was_autoreset` 并 OR-latch；
+- real-pool 测试固定 baseline、env 1 exact mask、env 2 首个/四个 substep latch 和下一步
+  clear；
+- production 热路径没有 `getattr/hasattr` capability probe，也不读取 XML 或 asset metadata。
+
+依赖固定为 `mujoco-uni-runtime==0.4.0.dev0`，Git URL 是
+`https://github.com/lemon-star608/mujoco_uni.git`，source/lock/安装态 commit 都是
+`7205e070e983df90d520f0f8593853013e976746`。本批没有使用 sibling checkout 或 artifact，
+没有修改 MuJoCoUni owner 仓库。M0-dev 仍没有 `cpu_ids/worker_cpu_ids` ABI；CPU affinity
+和正式 dependency promotion 继续属于 Code #10，Code #6 不构成正式 support 声明。
 
 ### Code #7：assets、task foundations 和 T0
 
@@ -634,8 +680,13 @@ registry mujoco-uni-runtime 0.3.1 在真实 mixed-layout model oracle 上失败�
 
 ~~~text
 mujoco-uni-runtime 0.4.0.dev0
+Git URL https://github.com/lemon-star608/mujoco_uni.git
 source SHA 7205e070e983df90d520f0f8593853013e976746
 ~~~
+
+Code #6 已把 pyproject 和 uv.lock 固定到上述 HTTPS Git URL 与完整 SHA；安装态
+`direct_url.json` 也记录同一 requested revision 和 commit id，`BatchEnvPool.was_autoreset`
+为真实 public property。该 identity 只用于开发阶段，不是 M0-release artifact。
 
 M0-dev 必须提供：
 
