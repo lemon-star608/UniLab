@@ -197,8 +197,10 @@ feat/simtoolreal-sapg-rlgames
 docs: record SAPG Code 8 completion
 ~~~
 
-实现 session 的 dispatch HEAD 应是上述基线的单个 docs child。该 docs child 只新增本
-prompt，并把总指导文档中的 Code #9 状态更新为“已规划，待实现”。开始时运行：
+实现 session 的 dispatch HEAD 应是上述基线的两个连续 docs-only children。第一个 child 只
+新增本 prompt，并把总指导文档中的 Code #9 状态更新为“已规划，待实现”；第二个 child 只
+修正 Phase 0 临时 overlay 的 canonical Torch 解析和对应说明，不改变任何 runtime、vendor、
+oracle 或 fixture contract。开始时运行：
 
 ~~~bash
 set -e
@@ -206,12 +208,12 @@ set -o pipefail
 SAPG_CODE9_BASE=03c2141437ab558dccad0342cac38e9ae6ae7572
 test "$(git rev-parse --abbrev-ref HEAD)" = "feat/simtoolreal-sapg-rlgames"
 git merge-base --is-ancestor "$SAPG_CODE9_BASE" HEAD
-test "$(git rev-list --count "$SAPG_CODE9_BASE"..HEAD)" -eq 1
+test "$(git rev-list --count "$SAPG_CODE9_BASE"..HEAD)" -eq 2
 test "$(git diff --name-status "$SAPG_CODE9_BASE"..HEAD)" = \
   $'A\tdocs/simtoolreal_sapg_code9_prompt.md\nM\tdocs/simtoolreal_sapg_source_fidelity_migration_plan.md'
 test -z "$(git status --short)"
 test -z "$(git diff --cached --name-only)"
-git log -2 --oneline
+git log -3 --oneline
 git status --short --branch
 ~~~
 
@@ -274,6 +276,15 @@ BatchEnvPool.was_autoreset: real property
 当前 root environment在 dispatch前预期没有安装 vendored distribution。Phase 9A必须先用
 测试记录缺失 dependency的真实 RED，再通过 root optional extra修复。不得靠 `sys.path`
 插入 `third_party` 或 `PYTHONPATH` 伪装安装态。
+
+Phase 0 的 `uv run --with-editable ./third_party/simtoolreal_rl_games` 会建立临时 overlay，并
+独立解析 vendor 声明的 `torch==2.7.0`。因此该命令必须同时增加
+`--with 'torch==2.7.0+cu128'` 和
+`--index pytorch-cu128=https://download.pytorch.org/whl/cu128` 来固定 canonical wheel；否则
+Linux/x86_64 上可能从 PyPI 解析到 `2.7.0+cu126` 并遮蔽基础 `.venv` 中正确的 cu128 runtime。
+未显式固定 index 的临时 overlay 得到 cu126 不是 oracle identity drift，也不得用来
+rebaseline；只有下文规定的 constrained command 仍不满足第3.3节 identity 时才按停止条件
+返回 `# BLOCKED`。
 
 Linux/aarch64 root当前固定 Torch 2.9，而 vendor metadata固定 Torch 2.7。Code #9 不修改
 vendor metadata或 root aarch64 Torch。`rlgames-sapg` optional dependency必须用 PEP 508 marker
@@ -913,6 +924,8 @@ uv run pytest \
 
 UNILAB_REQUIRE_SAPG=1 uv run \
   --with-editable ./third_party/simtoolreal_rl_games \
+  --with 'torch==2.7.0+cu128' \
+  --index pytorch-cu128=https://download.pytorch.org/whl/cu128 \
   pytest tests/algos/rlgames_sapg/test_import.py \
          tests/algos/rlgames_sapg/test_source_config.py \
          tests/algos/rlgames_sapg/test_checkpoint_golden.py -q
@@ -1147,7 +1160,7 @@ diff、复跑近风险gates、核对native owner/path/visual mapping和真实CLI
 
 出现任一情况立即停止写入并返回 `# BLOCKED`：
 
-1. branch、lineage、single-docs-child、clean tree或empty staging不符合第3.1节；
+1. branch、两个docs-only children的lineage、clean tree或empty staging不符合第3.1节；
 2. 固定 Source commit/blob不存在或hash不符，vendor/oracle/M0-dev identity不符，或vendored
    distribution不能从checked-in path exact安装；第5.1节已知root-attributes audit RED不是
    vendor identity drift，外部Source checkout的当前HEAD前进本身也不触发本条件；

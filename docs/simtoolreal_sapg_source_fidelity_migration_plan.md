@@ -600,6 +600,12 @@ registry/construction、8B NpEnv lifecycle、8C real 600-tool/wrench/autoreset i
 config、adapter/Runner、tracker/checkpoint、native player/CLI 和真实 vertical slice 的顺序与
 停止条件。
 
+Phase 0 用 `uv run --with-editable` 临时加载 vendor 时，overlay 会独立解析 vendor 的
+`torch==2.7.0`，必须同时显式增加 `--with 'torch==2.7.0+cu128'` 和
+`--index pytorch-cu128=https://download.pytorch.org/whl/cu128`。未加这两个约束时从 PyPI
+得到 cu126 只是临时 overlay 选源错误，不是 frozen oracle/runtime drift，不得因此放宽或
+重生成 fixture。
+
 唯一主要结果：建立一个可 train、resume、weights-load 和 play 的 native vertical slice。
 
 只做：
