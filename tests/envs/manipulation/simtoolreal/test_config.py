@@ -33,7 +33,7 @@ def test_config_defaults_preserve_source_contract() -> None:
         0.03,
         0.003,
     )
-    assert not registry.contains("SimToolReal")
+    assert registry.contains("SimToolReal")
 
 
 def test_config_rejects_asset_owned_override() -> None:

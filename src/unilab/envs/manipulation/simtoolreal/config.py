@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from unilab.assets import ASSETS_ROOT_PATH
+from unilab.base import registry
 from unilab.base.base import EnvCfg
 from unilab.base.scene import SceneCfg
 
@@ -309,6 +310,7 @@ class DomainRandomizationCfg:
     friction_n_buckets: int = 16
 
 
+@registry.envcfg("SimToolReal")
 @dataclass
 class SimToolRealCfg(EnvCfg):
     """Top-level config for the SimToolReal goal-pose-reaching task.

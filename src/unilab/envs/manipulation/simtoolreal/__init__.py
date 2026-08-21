@@ -1,9 +1,7 @@
-"""Backend-neutral SimToolReal task foundations.
+"""Registered SimToolReal MuJoCo task and backend-neutral task foundations."""
 
-This Code #7 package intentionally has no environment owner or registry import.
-The real NpEnv composition is a later child batch.
-"""
-
+# Registration order is semantic: the config owner must exist before env import.
+# isort: off
 from .config import (
     ActionCfg,
     AssetsCfg,
@@ -16,6 +14,9 @@ from .config import (
     TerminationCfg,
 )
 from .dr_provider import SimToolRealDRProvider
+from . import env  # registers SimToolReal after its config owner
+from .env import SimToolRealEnv
+# isort: on
 
 __all__ = [
     "ActionCfg",
@@ -27,5 +28,7 @@ __all__ = [
     "RewardCfg",
     "SimToolRealCfg",
     "SimToolRealDRProvider",
+    "SimToolRealEnv",
     "TerminationCfg",
+    "env",
 ]
