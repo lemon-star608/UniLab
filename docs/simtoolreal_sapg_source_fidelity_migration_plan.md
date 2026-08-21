@@ -26,7 +26,7 @@ Code 6    补齐 MuJoCo backend public contracts            已完成
 Code 7    迁移 assets 和 task primitives，完成 T0          已完成
 Code 8    组合真实 MuJoCo env，完成 T1                     已完成
 Code 9    接 native Runner、adapter、tracker、pth 和 CLI    已完成
-Code 10   真实 smoke、正式依赖和 support promotion         未开始
+Code 10   真实 smoke、正式依赖和 support promotion         已规划，待实现
 ~~~
 
 后续不要求 IsaacSim/PhysX 与 MuJoCo 的真实轨迹、随机数、接触状态、reward curve 或训练
@@ -50,7 +50,7 @@ support 五个不同风险边界。
 | 7 | assets、task foundations、T0 | af5c3401cecf280fc641f48e9c3ae4a134260ac7 | 已完成 |
 | 8 | 真实 MuJoCo env composition、T1 | cc9a4fdea72b40716a861611cbca0fac874c7ce4 | 已完成 |
 | 9 | Source RL-Games SAPG production path | af01194e1074c9c6bc0938a66352198d5a36c12f | 已完成 |
-| 10 | release、dependency lock、support promotion | — | 未开始 |
+| 10 | release、dependency lock、support promotion | — | 已规划，待实现 |
 
 Code #5 提交后的已记录验证：
 
@@ -142,10 +142,12 @@ Code #9 提交后的已记录验证：
   sim2sim；没有运行 `make test-all`，没有进入 Code #10。
 
 以上证据证明已接受的算法/runtime、backend、task、真实 env 和 production vertical slice
-回归边界。当前仍然没有：
+回归边界。Code #10 的执行 prompt 已写入
+`docs/simtoolreal_sapg_code10_prompt.md`，但 Code #10 尚未开始。当前仍然没有：
 
 - 持续 M0-dev S1 和真实 `12288/2048` profile 证据；
 - clean-install M0-release artifact 和正式 dependency promotion；
+- mixed-layout、autoreset、CPU affinity 的 release 组合回归；
 - `make test-all`、final-current-head CI 和 maintainer support judgment。
 
 ## 3. 目标、owner 和非目标
@@ -685,22 +687,31 @@ script、独立 CLI route、pth resolver、native player path 和一个既有col
 
 ### Code #10：release 和 support promotion
 
-唯一主要结果：把已经真实验证的开发路径晋升为可安装、可维护的正式 support。
+状态：已规划，待实现。执行 prompt 为
+docs/simtoolreal_sapg_code10_prompt.md。
 
-按顺序只做：
+唯一主要结果：把已经真实验证的开发路径晋升为可安装、可维护、可审查的正式 support
+候选；算法、task、env 和 native RL-Games owner 不在本 Code 重新设计。
 
-1. M0-dev 小规模 S1 finite train/play smoke；
-2. 12288/2048 profile；
-3. 外部 clean-install M0-release artifact；
-4. dependency lock 从 dev identity 晋升为正式 artifact；
-5. mixed-layout、autoreset、affinity 组合回归；
-6. audit、docs、support matrix、make test-all；
-7. final-current-head CI；
-8. maintainer support judgment。
+按 prompt 的四个 child 顺序只做：
 
-没有 M0-release、真实 train/play、完整测试和最终产品判断时，Code #10 保持未完成。
+1. 10A：当前 M0-dev identity 上的 S1 finite multi-epoch train/play 和 release preflight；
+2. 10B：真实 12288/2048/6 profile，以及 mixed-layout/autoreset 组合测试和 affinity ABI
+   preflight；
+3. 10C：维护者提供的 M0-release sdist 的 clean-install、artifact/hash/provenance 验证，
+   再把 Target pyproject/uv.lock 从 0.4.0.dev0 晋升为正式 artifact；
+4. 10D：正式 artifact 下的组合回归、dependency/source/cold-path audit、安装文档、support
+   matrix、make test-all 和控制 session handoff。
 
-永久成本：正式 MuJoCoUni dependency、release provenance、support docs 和升级复验。
+MuJoCoUni owner 仓库仍是外部写入边界：当前没有正式 0.4.0 artifact 或
+cpu_ids/worker_cpu_ids ABI 时，执行 session 必须在 10C/对应 preflight 返回 BLOCKED，不得
+修改、发布或清理外部仓库，不得用 dirty sibling checkout 代替 release。
+
+没有 M0-release、真实 train/play、完整测试、当前 HEAD CI 和 maintainer 产品判断时，
+Code #10 保持未完成；实现 session 的 DONE 只能表示 local candidate 已交回控制 session。
+
+永久成本：正式 MuJoCoUni dependency、artifact/provenance manifest、support docs 和
+升级复验；不新增第二套训练 runtime 或 release wrapper。
 
 ## 10. T0 和 T1
 
@@ -870,14 +881,17 @@ M0-dev 的 cpu_ids=null 允许任务和 smoke 前进，但不能声称 CPU affin
 
 M0-release 在真实 task train/play 后完成：
 
-- 以固定 0.4 代码线产生 clean-install 正式 artifact；
+- 由 MuJoCoUni maintainer 以固定 0.4 代码线产生版本为 0.4.0 的 clean-install sdist；
+- artifact 必须有 filename、SHA256、构建 MuJoCo 版本、source commit/tree 和
+  platform/Python provenance；
 - 恢复并验证 cpu_ids/worker_cpu_ids ABI；
 - 同时通过 mixed-layout、autoreset 和 affinity；
 - 用正式 artifact 替换 dev dependency；
 - 阻塞最终 support，但不阻塞 Code #1-#9 的开发。
 
 MuJoCoUni owner 仓库中的生产修改需要独立普通中文 roadmap 和明确授权，本路线不自动
-授权外部源码修改。
+授权外部源码修改。没有 maintainer 提供的 artifact 时，Code #10 在 release preflight
+处保持 BLOCKED，不得用 dirty sibling checkout 代替。
 
 ## 13. 执行和验证协议
 
@@ -891,8 +905,10 @@ MuJoCoUni owner 仓库中的生产修改需要独立普通中文 roadmap 和明�
 6. 手工文件编辑使用 apply_patch；
 7. fixture 只能由固定 generator 生成，普通 pytest 不 rebaseline；
 8. 独立检查 scope、provenance、代码质量和 focused tests；
-9. 精确 stage 当前 batch 文件并 commit；
-10. post-commit fresh validation 和 clean worktree 后才能进入下一 Code。
+9. 实现 session 交回未暂存改动；控制 session 审查后才精确 stage 当前 batch 文件并
+   commit；
+10. 控制 session 运行 post-commit fresh validation 和 clean worktree 检查后，才能进入
+   下一 Code。
 
 阶段 prompt 可以在 Code #6-#10 执行期间作为独立 docs commit 保留；每个 Code 完成后，
 最终事实必须同步回本文件。整条路线完成后再统一清理阶段 prompt，不重写已完成的 Code
@@ -936,12 +952,13 @@ Code #9：
 
 Code #10：
 
-- M0-dev S1；
-- 12288/2048 profile；
-- clean-install M0-release；
-- dependency audit；
+- M0-dev S1 finite multi-epoch train/play；
+- 12288/2048/6 真实 profile；
+- mixed-layout、per-env autoreset 和 cpu_ids/worker_cpu_ids 组合；
+- clean-install M0-release artifact、hash/provenance 和 dependency audit；
 - make test-all；
-- final-current-head remote CI。
+- final-current-head remote CI；
+- maintainer support judgment。
 
 ### 13.3 Required SAPG mode
 
@@ -976,6 +993,7 @@ production path 暴露前和最终 PR 前必须运行 make test-all。最终 PR 
 - 当前 Code 引入未批准 public owner、execution path 或 support scope；
 - Source/Target 或 T0/T1 出现无法解释 mismatch；
 - canonical AMP、真实 MuJoCo 或 M0-release 不能实际执行；
+- M0-release artifact 缺失、版本仍为 .dev0、hash/provenance 不完整或 affinity ABI 缺失；
 - required tests 有 skip、failure 或未解释 warning；
 - Source/vendor/M0-dev/M0-release provenance 不完整；
 - 只能使用 dirty sibling checkout；
