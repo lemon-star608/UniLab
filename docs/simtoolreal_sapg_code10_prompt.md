@@ -192,6 +192,13 @@ canonical Torch:
   torch==2.7.0+cu128
   CUDA build 12.8
   cuDNN 90701
+canonical SAPG validation:
+  Python 3.11.15
+  Linux x86_64 / NVIDIA RTX 4090
+
+The M0-dev manifest's `build_runtime.python=3.13.15` is external MuJoCoUni
+build/test provenance only. It is not the Target SAPG oracle platform and must
+not replace the Python 3.11.15 validation identity above.
 ~~~
 
 Code #10 不重新生成 Code #1-#5 fixtures。UNILAB_REQUIRE_SAPG=1 仍必须显式设置；

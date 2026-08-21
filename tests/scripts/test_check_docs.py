@@ -90,6 +90,28 @@ uv run scripts/train_rsl_rl.py missing_key=true task=go1_joystick_flat/mujoco
     assert any("Unknown config key: missing_key" in error for error in errors)
 
 
+def test_check_hydra_keys_handles_tilde_fences_and_shell_package_specs():
+    root = Path(__file__).resolve().parents[2]
+    doc_path = root / "README.md"
+    content = """
+~~~text
+torch==2.7.0+cu128
+algo.num_envs=6
+~~~
+
+~~~bash
+CANONICAL_ROOT=$(mktemp -d)
+uv run --with 'torch==2.7.0+cu128' scripts/train_rsl_rl.py task=go1_joystick_flat/mujoco \
+  rl_games.params.config.max_epochs=1 \
+  missing_key=true
+~~~
+"""
+
+    errors = doc_checks.check_hydra_keys(content, doc_path, root)
+
+    assert errors == [f"{doc_path}: Unknown config key: missing_key"]
+
+
 def test_check_script_references_ignores_tests_paths():
     root = Path(__file__).resolve().parents[2]
     doc_path = root / "CONTRIBUTING.md"
@@ -134,6 +156,15 @@ def test_collect_doc_errors_flags_unclosed_markdown_fence(tmp_path):
     readme.write_text(
         "```bash\nuv run scripts/train_rsl_rl.py task=go1_joystick_flat/mujoco\n", encoding="utf-8"
     )
+
+    errors = doc_checks.collect_doc_errors(tmp_path)
+
+    assert any("Unclosed fenced code block" in error for error in errors)
+
+
+def test_collect_doc_errors_flags_unclosed_tilde_fence(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text("~~~bash\nuv run train task=go1_joystick_flat/mujoco\n", encoding="utf-8")
 
     errors = doc_checks.collect_doc_errors(tmp_path)
 

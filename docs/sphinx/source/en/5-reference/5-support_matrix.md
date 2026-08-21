@@ -25,7 +25,7 @@ write target for the generated block is currently the Chinese reference page
 | Grade | Repository Evidence |
 | --- | --- |
 | `Registered` | The env/backend pair appears after `registry.ensure_registries()`. |
-| `Configured` | A matching owner YAML exists under `conf/ppo/task`, `conf/appo/task`, or `conf/offpolicy/task`. |
+| `Configured` | A matching owner YAML exists under `conf/ppo/task`, `conf/appo/task`, `conf/offpolicy/task`, or `conf/rlgames_sapg/task`. |
 | `Tested` | Automated tests cover the entrypoint/task-owner/backend combination through config compose or runtime smoke. |
 | `Benchmarked` | A checked-in benchmark manifest exists for the combination. |
 | `Recommended` | Explicit recommendation metadata exists in the repo. |
@@ -33,6 +33,11 @@ write target for the generated block is currently the Chinese reference page
 The current generator reports no checked-in benchmark manifest and no separate
 recommendation metadata, so rows do not auto-promote to `Benchmarked` or
 `Recommended`.
+
+`RL-Games SAPG` / `simtoolreal` / MuJoCo is `Tested` only for the Code #10
+M0-dev provisional identity `mujoco-uni-runtime==0.4.0.dev0`. It is not a
+formal M0 release, benchmark, recommendation, or cross-backend/platform support
+claim. Motrix and mjwarp remain unsupported for this entry.
 
 ## Entrypoint x Task Owner
 
@@ -75,12 +80,17 @@ recommendation metadata, so rows do not auto-promote to `Benchmarked` or
 | TD3 (torch) | `g1_walk_flat` | Tested | Registered |
 | FlashSAC (torch) | `go2_joystick_flat` | Tested | Registered |
 | FlashSAC (torch) | `g1_walk_flat` | Tested | Registered |
+| RL-Games SAPG | `simtoolreal` (SimToolReal) | Tested | - |
 
 ## Source Index
 
 - Registry bootstrap: `src/unilab/envs/**` registrations via
   `unilab.base.registry.ensure_registries()`.
 - Owner YAML scan: `conf/ppo/task/**`, `conf/appo/task/**`,
-  `conf/offpolicy/task/**`.
+  `conf/offpolicy/task/**`, `conf/rlgames_sapg/task/**`.
 - Generic compose coverage:
   `tests/config/test_config_system.py::test_supported_task_composes`.
+- Provisional SAPG evidence:
+  `tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json`,
+  `tests/algos/rlgames_sapg/**`, and
+  `tests/envs/manipulation/simtoolreal/test_m0_dev_matrix.py`.

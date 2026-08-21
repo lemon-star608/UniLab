@@ -223,6 +223,7 @@ class GPUResidentReplayPipeline:
         self._sync_stream: Any | None = None
         if self._device.type == "cuda":
             self._sync_stream = cast(torch.cuda.Stream, torch.cuda.Stream(device=self._device))
+            self._sync_stream.wait_stream(torch.cuda.current_stream(self._device))
             self._slot_events: list[Any] = [torch.cuda.Event() for _ in range(2)]
         else:
             self._slot_events = [torch.mps.Event() for _ in range(2)]

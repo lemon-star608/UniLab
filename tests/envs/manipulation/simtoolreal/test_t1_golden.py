@@ -15,7 +15,7 @@ FIXTURE_DIR = Path(__file__).resolve().parents[3] / "fixtures" / "simtoolreal_ta
 NPZ_PATH = FIXTURE_DIR / "target_t1_fp32.npz"
 MANIFEST_PATH = FIXTURE_DIR / "target_t1_manifest.json"
 NPZ_SHA256 = "228b704e0a5b8e94269ce4b4da29cff4e51bb57338390d79453fe0d921cfb760"
-MANIFEST_SHA256 = "6b87220134e2711939bad47d8ae64c0fa8820e5731b887c751d7646a061a5fdb"
+MANIFEST_SHA256 = "290813961c2d2780ea9a461e9955b81813cda32536a0426360133de355c6a430"
 
 
 def _sha256(path: Path) -> str:

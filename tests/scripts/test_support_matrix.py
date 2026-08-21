@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from unilab.utils.support_matrix import BACKENDS, EvidenceLevel, build_support_rows
+from unilab.utils.support_matrix import (
+    BACKENDS,
+    EvidenceLevel,
+    build_support_rows,
+    render_support_matrix,
+)
 
 
 def _row(entrypoint_label: str, task_slug: str):
@@ -67,3 +72,17 @@ def test_support_matrix_marks_sharpa_motrix_phase1_support():
 
     assert allegro_appo_row.cells["mujoco"].level == EvidenceLevel.TESTED
     assert allegro_appo_row.cells["motrix"].level == EvidenceLevel.TESTED
+
+
+def test_support_matrix_marks_only_mujoco_simtoolreal_sapg_as_provisional_tested():
+    row = _row("RL-Games SAPG", "simtoolreal")
+
+    assert row.task_label == "SimToolReal"
+    assert row.cells["mujoco"].level == EvidenceLevel.TESTED
+    assert row.cells["mjwarp"].level == EvidenceLevel.MISSING
+    assert row.cells["motrix"].level == EvidenceLevel.MISSING
+    assert all(cell.level < EvidenceLevel.BENCHMARKED for cell in row.cells.values())
+
+    rendered = render_support_matrix(Path(__file__).resolve().parents[2])
+    assert "M0-dev provisional" in rendered
+    assert "mujoco-uni-runtime==0.4.0.dev0" in rendered

@@ -209,6 +209,24 @@ class TestGPUResidentPipeline:
         assert manifest["storage_rows"] == 64
         assert manifest["host_pinned"] is True
 
+    def test_side_stream_waits_for_device_allocation_stream(self, pipeline_factory):
+        warmup = pipeline_factory(_make_replay(capacity=64), sample_count=8)
+        warmup.close()
+        current_stream = torch.cuda.current_stream()
+        torch.cuda._sleep(500_000_000)
+        allocation_stream_ready = torch.cuda.Event()
+        allocation_stream_ready.record(current_stream)
+
+        rb = _make_replay(capacity=64)
+        pipeline = pipeline_factory(rb, sample_count=8)
+        side_stream_ready = torch.cuda.Event()
+        side_stream_ready.record(pipeline._sync_stream)
+        side_stream_ready.synchronize()
+
+        handoff_was_ordered = allocation_stream_ready.query()
+        allocation_stream_ready.synchronize()
+        assert handoff_was_ordered
+
     def test_bounded_ingress_owns_no_full_host_ring_and_commits_after_h2d(self, pipeline_factory):
         rb = _make_bounded_replay(capacity=64, slot_rows=16)
         _pattern_add(rb, 0, 16)

@@ -681,6 +681,9 @@ def test_render_play_mode_defaults_to_env_physics_snapshot(
             self.snapshot_calls += 1
             return np.full((2, 4), self.snapshot_calls, dtype=np.float32)
 
+        def get_scene_visual_model_file(self) -> str | None:
+            return None
+
         def run_playback(self, **kwargs):
             kwargs = _resolve_low_level_playback_flags(kwargs)
             kwargs.pop("render_offset_mode", None)
@@ -729,9 +732,9 @@ def test_render_play_mode_uses_visualized_per_env_playback_models_for_video_expo
     visual_xml = """
     <mujoco>
       <worldbody>
-        <geom name="ground" type="plane" size="2 2 0.1"/>
+        <geom name="ground" type="plane" size="2 2 0.1" contype="0" conaffinity="0"/>
         <body name="hand" pos="0 0 0.3">
-          <geom name="hand_geom" type="box" size="0.05 0.05 0.05"/>
+          <geom name="hand_geom" type="box" size="0.05 0.05 0.05" contype="0" conaffinity="0"/>
         </body>
         <body name="object_body" pos="0 0 0.6">
           <geom name="object" type="box" size="0.1 0.1 0.1"/>
@@ -762,6 +765,9 @@ def test_render_play_mode_uses_visualized_per_env_playback_models_for_video_expo
         def get_physics_state_snapshot(self) -> np.ndarray:
             self.snapshot_calls += 1
             return np.full((2, 2), self.snapshot_calls, dtype=np.float32)
+
+        def get_scene_visual_model_file(self) -> str:
+            return str(visual_model_path)
 
         def get_playback_model(self, env_index: int | None = None):
             idx = 0 if env_index is None else int(env_index)

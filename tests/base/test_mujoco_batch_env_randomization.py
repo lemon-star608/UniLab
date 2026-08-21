@@ -30,6 +30,7 @@ EXPECTED_SUPPORTED_FIELDS = {
     "geom_friction",
     "geom_size",
     "geom_pos",
+    "mocap_pos",
     "kp",
     "kd",
 }

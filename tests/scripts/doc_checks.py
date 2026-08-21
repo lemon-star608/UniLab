@@ -11,6 +11,7 @@ VALID_HYDRA_KEYS = {
     "training",
     "reward",
     "env",
+    "rl_games",
     "teacher",
     "interactive",
     "viser",
@@ -65,6 +66,8 @@ USER_DOC_MIGRATION_PHRASES = [
 ]
 
 USER_DOC_MAX_LINES = 120
+
+_FENCE_PATTERN = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})\s*(?P<language>[A-Za-z0-9_+-]*)\s*$")
 
 SPHINX_REMOVED_PATH_PATTERNS = [
     (
@@ -192,18 +195,22 @@ def check_raw_github_repo_urls(content: str, doc_path: Path, root: Path) -> list
 def check_markdown_fences(content: str, doc_path: Path, root: Path) -> list[str]:
     del root
     errors: list[str] = []
-    fence_start: int | None = None
+    fence_start: tuple[str, int, int] | None = None
 
     for line_no, line in enumerate(content.splitlines(), start=1):
-        if not re.match(r"^\s*```", line):
+        match = _FENCE_PATTERN.match(line)
+        if match is None:
             continue
+        marker = match.group("marker")
+        marker_info = (marker[0], len(marker))
+        language = match.group("language")
         if fence_start is None:
-            fence_start = line_no
-        else:
+            fence_start = (*marker_info, line_no)
+        elif marker_info[0] == fence_start[0] and marker_info[1] >= fence_start[1] and not language:
             fence_start = None
 
     if fence_start is not None:
-        errors.append(f"{doc_path}: Unclosed fenced code block starting at line {fence_start}")
+        errors.append(f"{doc_path}: Unclosed fenced code block starting at line {fence_start[2]}")
 
     return errors
 
@@ -235,18 +242,32 @@ def check_canonical_commands(content: str, doc_path: Path, root: Path) -> list[s
 def check_hydra_keys(content: str, doc_path: Path, root: Path) -> list[str]:
     del root
     errors: list[str] = []
-    hydra_pattern = r"(?:^|\s)([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)="
-    command_fence_languages = {"", "bash", "console", "shell", "sh", "text"}
-    in_fence = False
+    hydra_pattern = (
+        r"(?:^|\s)(?![A-Z][A-Z0-9_]*=)"
+        r"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)=(?!=)"
+    )
+    command_fence_languages = {"", "bash", "console", "shell", "sh"}
+    fence_marker: tuple[str, int] | None = None
     fence_language = ""
 
     for line in content.splitlines():
-        fence_match = re.match(r"^\s*```\s*([A-Za-z0-9_+-]*)", line)
+        fence_match = _FENCE_PATTERN.match(line)
         if fence_match:
-            in_fence = not in_fence
-            fence_language = fence_match.group(1).lower() if in_fence else ""
+            marker = fence_match.group("marker")
+            marker_info = (marker[0], len(marker))
+            language = fence_match.group("language").lower()
+            if fence_marker is None:
+                fence_marker = marker_info
+                fence_language = language
+            elif (
+                marker_info[0] == fence_marker[0]
+                and marker_info[1] >= fence_marker[1]
+                and not language
+            ):
+                fence_marker = None
+                fence_language = ""
             continue
-        if in_fence and fence_language not in command_fence_languages:
+        if fence_marker is not None and fence_language not in command_fence_languages:
             continue
 
         stripped = line.strip()

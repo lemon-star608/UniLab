@@ -90,7 +90,7 @@ url = "https://download-r2.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.uv.sources]
-mujoco-uni-runtime = { git = "https://github.com/lemon-star608/mujoco_uni.git", rev = "7205e070e983df90d520f0f8593853013e976746" }
+mujoco-uni-runtime = { git = "https://github.com/lemon-star608/mujoco_uni.git", rev = "54a2197be5b0cd65e9d71ff884d8415191925136" }
 unilab-simtoolreal-rl-games = { path = "third_party/simtoolreal_rl_games", editable = true }
 torch = [
     { index = "r2-cu130", marker = "sys_platform=='linux' and platform_machine=='aarch64'" },
