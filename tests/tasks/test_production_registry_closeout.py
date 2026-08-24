@@ -47,6 +47,9 @@ CANONICAL_MANAGER_RUNTIME_FACTORIES = (
     # Approved wrapper: cold-path untracked X2 mesh resolution before
     # delegating to the generic factory.
     ("unilab.tasks.motion_tracking.x2", "make_x2_wall_flip_env"),
+    # Approved wrapper: cold-path A2Arm mesh resolution before delegating to
+    # the generic manager-based factory.
+    ("unilab.tasks.locomotion.a2arm", "make_a2arm_pos_force_env"),
 )
 
 REMOVED_LEGACY_ENV_PACKAGES = (
