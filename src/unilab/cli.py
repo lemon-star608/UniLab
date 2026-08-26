@@ -13,9 +13,10 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import Sequence
 
+from unilab.algos.torch.rlgames_sapg.dependency import require_rlgames_sapg
 from unilab.demo import run_demo
 
-SUPPORTED_ALGOS = ("ppo", "appo", "sac", "td3", "flashsac")
+SUPPORTED_ALGOS = ("ppo", "appo", "sac", "td3", "flashsac", "rlgames_sapg")
 SUPPORTED_SIMS = ("mujoco", "mjwarp", "motrix")
 SUPPORTED_RENDER_MODES = ("auto", "interactive", "record", "none")
 OFFPOLICY_ALGOS = {"sac", "td3", "flashsac"}
@@ -112,6 +113,13 @@ def _check_runtime_requirements(algo: str, sim: str) -> None:
         raise SystemExit(
             "sim=motrix requires the Motrix extra. Install it with `uv sync --extra motrix`."
         )
+    if algo == "rlgames_sapg":
+        if platform.system() == "Linux" and platform.machine() == "aarch64":
+            raise SystemExit("RL-Games SAPG is unsupported on Linux/aarch64.")
+        try:
+            require_rlgames_sapg()
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
 
 
 def _override_bool(overrides: Sequence[str], key: str) -> bool | None:
@@ -198,6 +206,13 @@ def build_route(algo: str, task: str, sim: str, profile: str | None = None) -> R
         return Route(
             script_name="train_appo.py",
             config_group="appo",
+            owner_task=f"{task}/{owner}.yaml",
+            generated_overrides=(f"task={task_choice}",),
+        )
+    if algo == "rlgames_sapg":
+        return Route(
+            script_name="train_rlgames_sapg.py",
+            config_group="rlgames_sapg",
             owner_task=f"{task}/{owner}.yaml",
             generated_overrides=(f"task={task_choice}",),
         )

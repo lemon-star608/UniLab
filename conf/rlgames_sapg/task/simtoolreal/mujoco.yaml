@@ -1,0 +1,81 @@
+# @package _global_
+training:
+  task_name: SimToolReal
+  sim_backend: mujoco
+
+algo:
+  num_envs: 24576
+
+reward:
+  keypoint_rew_scale: 200.0
+  object_base_size: 0.04
+  fixed_size: [0.141, 0.03025, 0.0271]
+  fixed_size_keypoint_reward: true
+  lifting_rew_scale: 20.0
+  lifting_bonus: 300.0
+  lifting_bonus_threshold: 0.15
+  distance_delta_rew_scale: 50.0
+  reach_goal_bonus: 1000.0
+  kuka_actions_penalty_scale: 0.03
+  hand_actions_penalty_scale: 0.003
+
+env:
+  action_space: 29
+  sim_dt: 0.008333333333333333
+  ctrl_dt: 0.016666666666666666
+  max_episode_seconds: 10.0
+  assets:
+    object_name: handle_head_primitives
+    handle_head_types: [hammer, screwdriver, marker, spatula, eraser, brush]
+    num_assets_per_type: 50
+    shuffle_assets: true
+    object_pool_enabled: true
+    object_pool_seed: 42
+  action:
+    arm_moving_average: 0.1
+    hand_moving_average: 0.1
+    dof_speed_scale: 1.5
+    clip_actions: 1.0
+  goal:
+    goal_sampling_type: delta
+    delta_goal_distance: 0.1
+    delta_rotation_degrees: 90.0
+    success_tolerance: 0.075
+    target_success_tolerance: 0.01
+    success_steps: 10
+    keypoint_scale: 1.5
+  reset:
+    object_pose_mode: source_random
+    reset_position_noise_x: 0.1
+    reset_position_noise_y: 0.1
+    reset_position_noise_z: 0.02
+    reset_dof_pos_random_interval_arm: 0.1
+    reset_dof_pos_random_interval_fingers: 0.1
+    reset_dof_vel_random_interval: 0.5
+    object_spawn_z_reference_range: 0.0
+  termination:
+    episode_length: 600
+    max_consecutive_successes: 50
+    tolerance_curriculum_increment: 0.9
+    tolerance_curriculum_interval: 3000
+    tolerance_curriculum_success_threshold: 3.0
+  domain_randomization:
+    use_obs_delay: true
+    obs_delay_max: 3
+    use_action_delay: true
+    action_delay_max: 3
+    use_object_state_delay_noise: true
+    object_state_delay_max: 10
+    object_state_xyz_noise_std: 0.01
+    object_state_rotation_noise_degrees: 5.0
+    joint_velocity_obs_noise_std: 0.1
+    force_scale: 20.0
+    force_prob_range: [0.001, 0.1]
+    force_decay: 0.0
+    force_decay_interval: 0.08
+    force_only_when_lifted: true
+    torque_scale: 2.0
+    torque_prob_range: [0.001, 0.1]
+    torque_decay: 0.0
+    torque_decay_interval: 0.08
+    torque_only_when_lifted: true

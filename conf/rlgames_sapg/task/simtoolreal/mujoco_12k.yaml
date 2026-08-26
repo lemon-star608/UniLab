@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - /task/simtoolreal/mujoco
+
+algo:
+  num_envs: 12288
+
+rl_games:
+  params:
+    config:
+      expl_coef_block_size: 2048
