@@ -107,6 +107,7 @@ def test_g1_visual_model_and_replay_forward_camera_and_spacing(
     env = SimpleNamespace(
         cfg=SimpleNamespace(ctrl_dt=0.02, scene=SceneCfg(model_file=str(G1_SCENE))),
         get_playback_model=backend.get_playback_model,
+        get_scene_visual_model_file=lambda: str(G1_SCENE),
         get_physics_state_snapshot=backend.get_physics_state,
     )
     captured: dict[str, object] = {}

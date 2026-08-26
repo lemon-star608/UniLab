@@ -303,6 +303,14 @@ class SimBackend(abc.ABC):
             per-phase timings in milliseconds.
         """
 
+    def get_step_autoreset_mask(self) -> np.ndarray | None:
+        """Report envs silently reset by the engine during the last step.
+
+        ``None`` means the backend cannot report this event; it does not mean
+        that the last step completed without an autoreset.
+        """
+        return None
+
     def set_pre_step_control(self, fn: PreStepControlFn | None) -> None:
         """Register an env-owned policy-control to physics-control converter.
 
@@ -383,6 +391,23 @@ class SimBackend(abc.ABC):
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} does not support interval body force perturbation"
+        )
+
+    def apply_body_wrench(
+        self,
+        body_ids: np.ndarray,
+        force: np.ndarray,
+        torque: np.ndarray,
+    ) -> None:
+        """Stage world-frame force and torque for specific bodies.
+
+        Args:
+            body_ids: Body ids to perturb.
+            force: Force values with shape ``(num_envs, len(body_ids), 3)``.
+            torque: Torque values with shape ``(num_envs, len(body_ids), 3)``.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support body wrench perturbation"
         )
 
     def get_play_capabilities(self) -> BackendPlayCapabilities:

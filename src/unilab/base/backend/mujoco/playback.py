@@ -126,9 +126,8 @@ def _configured_model_file(env: Any) -> str | None:
 
 
 def _visual_model_file(env: Any) -> str | None:
-    backend = getattr(env, "_backend", None)
-    backend_visual_model_file = getattr(backend, "scene_visual_model_file", None)
-    if backend_visual_model_file:
+    backend_visual_model_file = env.get_scene_visual_model_file()
+    if backend_visual_model_file is not None:
         return str(backend_visual_model_file)
     return _configured_model_file(env)
 
@@ -194,23 +193,78 @@ def materialize_visual_playback_model(
     playback_model: Any,
     output_path: str | Path,
 ) -> str:
-    """Compile a visual MuJoCo model using geom sizes from a playback model."""
+    """Compile a visual model with the assigned model's contact topology."""
     import mujoco as _mujoco
 
     mujoco: Any = _mujoco
 
     spec = mujoco.MjSpec.from_file(visual_model_file)
-    for geom_id in range(visual_base_model.ngeom):
-        geom_name = mujoco.mj_id2name(visual_base_model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
-        if not geom_name:
-            continue
-        playback_geom_id = mujoco.mj_name2id(playback_model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
-        if playback_geom_id < 0:
-            continue
+
+    def _name(model: Any, obj: Any, index: int) -> str | None:
+        value = mujoco.mj_id2name(model, obj, index)
+        return str(value) if value is not None else None
+
+    def _is_contact(model: Any, geom_id: int) -> bool:
+        return bool(model.geom_contype[geom_id] or model.geom_conaffinity[geom_id])
+
+    visual_contacts = {
+        name
+        for geom_id in range(visual_base_model.ngeom)
+        if _is_contact(visual_base_model, geom_id)
+        and (name := _name(visual_base_model, mujoco.mjtObj.mjOBJ_GEOM, geom_id))
+    }
+    playback_contacts = {
+        name: geom_id
+        for geom_id in range(playback_model.ngeom)
+        if _is_contact(playback_model, geom_id)
+        and (name := _name(playback_model, mujoco.mjtObj.mjOBJ_GEOM, geom_id))
+    }
+
+    for stale_name in visual_contacts - set(playback_contacts):
+        stale = spec.geom(stale_name)
+        if stale is not None:
+            spec.delete(stale)
+
+    unsupported_new_types = {int(mujoco.mjtGeom.mjGEOM_MESH), int(mujoco.mjtGeom.mjGEOM_HFIELD)}
+    for geom_name, playback_geom_id in playback_contacts.items():
         geom = spec.geom(geom_name)
         if geom is None:
-            continue
+            geom_type = int(playback_model.geom_type[playback_geom_id])
+            if geom_type in unsupported_new_types:
+                raise ValueError(
+                    f"cannot add named mesh/hfield contact geom {geom_name!r} without source assets"
+                )
+            body_id = int(playback_model.geom_bodyid[playback_geom_id])
+            body_name = _name(playback_model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+            body = spec.body(body_name) if body_name else None
+            if body is None:
+                raise ValueError(
+                    f"playback contact geom {geom_name!r} has no matching named visual body"
+                )
+            geom = body.add_geom(name=geom_name)
+
+        geom.type = mujoco.mjtGeom(int(playback_model.geom_type[playback_geom_id]))
         geom.size = list(np.asarray(playback_model.geom_size[playback_geom_id], dtype=np.float64))
+        geom.pos = list(np.asarray(playback_model.geom_pos[playback_geom_id], dtype=np.float64))
+        geom.quat = list(np.asarray(playback_model.geom_quat[playback_geom_id], dtype=np.float64))
+        geom.contype = int(playback_model.geom_contype[playback_geom_id])
+        geom.conaffinity = int(playback_model.geom_conaffinity[playback_geom_id])
+        geom.condim = int(playback_model.geom_condim[playback_geom_id])
+        geom.friction = list(
+            np.asarray(playback_model.geom_friction[playback_geom_id], dtype=np.float64)
+        )
+        geom.solref = list(
+            np.asarray(playback_model.geom_solref[playback_geom_id], dtype=np.float64)
+        )
+        geom.solimp = list(
+            np.asarray(playback_model.geom_solimp[playback_geom_id], dtype=np.float64)
+        )
+        geom.margin = float(playback_model.geom_margin[playback_geom_id])
+        geom.gap = float(playback_model.geom_gap[playback_geom_id])
+        geom.priority = int(playback_model.geom_priority[playback_geom_id])
+        geom.solmix = float(playback_model.geom_solmix[playback_geom_id])
+        geom.group = int(playback_model.geom_group[playback_geom_id])
+        geom.rgba = list(np.asarray(playback_model.geom_rgba[playback_geom_id], dtype=np.float32))
 
     visual_model = spec.compile()
     output = Path(output_path)

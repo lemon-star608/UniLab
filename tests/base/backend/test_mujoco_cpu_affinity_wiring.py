@@ -15,18 +15,7 @@ from unilab.base.base import EnvCfg
 
 pytest.importorskip("mujoco", reason="mujoco not installed")
 
-try:
-    from mujoco_uni.batch_env import BatchEnvPool
-except Exception:
-    pytest.skip(
-        "mujoco_uni.batch_env not available (platform/libstdc++ issue)", allow_module_level=True
-    )
-
-if "cpu_ids" not in inspect.signature(BatchEnvPool.__init__).parameters:
-    pytest.skip(
-        "installed mujoco-uni-runtime has no cpu_ids support (pre-0.3.1)",
-        allow_module_level=True,
-    )
+from mujoco_uni.batch_env import BatchEnvPool
 
 from unilab.assets import ASSETS_ROOT_PATH
 from unilab.base.backend.mujoco.backend import MuJoCoBackend
@@ -54,6 +43,11 @@ def test_envcfg_cpu_ids_default_none():
     cfg = EnvCfg()
     assert cfg.cpu_ids is None
     cfg.validate()
+
+
+def test_installed_runtime_exposes_cpu_affinity_abi():
+    assert "cpu_ids" in inspect.signature(BatchEnvPool.__init__).parameters
+    assert callable(BatchEnvPool.worker_cpu_ids)
 
 
 def test_envcfg_cpu_ids_overridable():

@@ -334,6 +334,7 @@ class MuJoCoBackend(SimBackend):
         self._np_dtype = np_dtype if np_dtype is not None else get_global_dtype()
         self.backend_type = "mujoco"
         self._pending_xfrc_applied = np.zeros((num_envs, 6 * self._model.nbody), dtype=np.float64)
+        self._autoreset_mask = np.zeros((num_envs,), dtype=bool)
 
         # Thread configuration. An explicit ``cpu_ids`` affinity pins one worker
         # per CPU, so it also fixes the pool worker count.
@@ -532,6 +533,22 @@ class MuJoCoBackend(SimBackend):
                             os.rmdir(parent)
                         except OSError:
                             pass
+
+        if any(variant.source_model_file is not None for variant in variants):
+            compiled: list[mujoco.MjModel] = []
+            for variant in variants:
+                source_file = variant.source_model_file or self._model_file
+                paths = _compile_model_variant_chunk_to_mjb(
+                    model_file=source_file,
+                    add_body_sensors=self.add_body_sensors,
+                    base_name=self._base_name,
+                    sim_dt=self._sim_dt,
+                    iterations=self._iterations,
+                    position_actuator_gains=self._position_actuator_gains,
+                    variants=(ModelVariantSpec(geom_size_overrides=variant.geom_size_overrides),),
+                )
+                compiled.extend(_load_compiled_models_and_cleanup(paths))
+            return tuple(compiled)
 
         if len(variants) == 1 or current_process().daemon:
             mjb_paths = _compile_model_variant_chunk_to_mjb(
@@ -844,6 +861,7 @@ class MuJoCoBackend(SimBackend):
     # ------------------------------------------------------------------ #
 
     def step(self, ctrl: np.ndarray, nsteps: int = 1) -> dict | None:
+        self._autoreset_mask.fill(False)
         if self._pre_step_control_fn is not None:
             return self._step_with_pre_step_control(ctrl, nsteps)
 
@@ -869,6 +887,7 @@ class MuJoCoBackend(SimBackend):
             return_sensor=True,
             post_step_forward_sensor=self._post_step_forward_sensor,
         )
+        self._latch_step_autoreset_mask()
         if control_spec & int(mujoco.mjtState.mjSTATE_XFRC_APPLIED):
             self._pending_xfrc_applied.fill(0.0)
         self._physics_state[:] = state_np.astype(self._np_dtype)
@@ -885,6 +904,16 @@ class MuJoCoBackend(SimBackend):
                 "refresh_cache_ms": refresh_cache_ms,
             }
         }
+
+    def get_step_autoreset_mask(self) -> np.ndarray | None:
+        if self._pool is None:
+            return None
+        return self._autoreset_mask
+
+    def _latch_step_autoreset_mask(self) -> None:
+        assert self._pool is not None
+        mask = np.asarray(self._pool.was_autoreset, dtype=bool)
+        np.logical_or(self._autoreset_mask, mask, out=self._autoreset_mask)
 
     def _step_with_pre_step_control(
         self, ctrl: np.ndarray, nsteps: int
@@ -915,6 +944,7 @@ class MuJoCoBackend(SimBackend):
                 return_sensor=True,
                 post_step_forward_sensor=self._post_step_forward_sensor,
             )
+            self._latch_step_autoreset_mask()
             self._physics_state[:] = state_np.astype(self._np_dtype)
             physics_ms += (time.perf_counter() - t0) * 1000.0
 
@@ -1102,6 +1132,30 @@ class MuJoCoBackend(SimBackend):
             self._pending_xfrc_applied[:, self._resolve_push_body_force_slice(int(body_id))] += (
                 force_np[:, body_offset, :]
             )
+
+    def apply_body_wrench(
+        self,
+        body_ids: np.ndarray,
+        force: np.ndarray,
+        torque: np.ndarray,
+    ) -> None:
+        """Accumulate world-frame force and torque per target body."""
+        body_ids_np = np.asarray(body_ids, dtype=np.int32).reshape(-1)
+        force_np = np.asarray(force, dtype=np.float64)
+        torque_np = np.asarray(torque, dtype=np.float64)
+        expected_shape = (self._num_envs, body_ids_np.size, 3)
+        if force_np.shape != expected_shape:
+            raise ValueError(
+                f"body wrench force must have shape {expected_shape}, got {force_np.shape}"
+            )
+        if torque_np.shape != expected_shape:
+            raise ValueError(
+                f"body wrench torque must have shape {expected_shape}, got {torque_np.shape}"
+            )
+        for body_offset, body_id in enumerate(body_ids_np):
+            start = 6 * int(body_id)
+            self._pending_xfrc_applied[:, start : start + 3] += force_np[:, body_offset, :]
+            self._pending_xfrc_applied[:, start + 3 : start + 6] += torque_np[:, body_offset, :]
 
     def get_play_capabilities(self) -> BackendPlayCapabilities:
         return BackendPlayCapabilities(supports_physics_state_playback=True)
