@@ -25,6 +25,14 @@ _MAINTAINER_VALIDATED_MJWARP_ENTRYPOINT_TASKS = frozenset(
     }
 )
 
+# M0-dev evidence is intentionally narrower than maintainer-confirmed release
+# support. It promotes exactly one provisional combination to Tested.
+_PROVISIONAL_M0_DEV_TESTED_ENTRYPOINT_TASK_BACKENDS = frozenset(
+    {
+        ("rlgames_sapg", "simtoolreal", "mujoco"),
+    }
+)
+
 _TASK_ORDER = {
     "go1_joystick_flat": 0,
     "go2_joystick_flat": 1,
@@ -39,6 +47,7 @@ _TASK_ORDER = {
     "allegro_sac": 10,
     "sharpa_inhand": 11,
     "sharpa_inhand_grasp": 12,
+    "simtoolreal": 13,
 }
 _TASK_LABELS = {
     "go1_joystick_flat": "Go1 joystick",
@@ -54,6 +63,7 @@ _TASK_LABELS = {
     "allegro_sac": "Allegro SAC in-hand",
     "sharpa_inhand": "Sharpa in-hand",
     "sharpa_inhand_grasp": "Sharpa in-hand grasp",
+    "simtoolreal": "SimToolReal",
 }
 
 
@@ -136,6 +146,12 @@ ENTRYPOINT_SPECS: tuple[EntrypointSpec, ...] = (
         task_glob="*/*.yaml",
         generic_tested=True,
     ),
+    EntrypointSpec(
+        entrypoint_id="rlgames_sapg",
+        label="RL-Games SAPG",
+        config_dir="conf/rlgames_sapg/task",
+        task_glob="*/*.yaml",
+    ),
 )
 
 
@@ -197,6 +213,12 @@ def _configured_entries(root: Path, spec: EntrypointSpec) -> dict[str, dict[str,
 
 
 def _is_tested(spec: EntrypointSpec, task_slug: str, backend: str, root: Path) -> bool:
+    if (
+        spec.entrypoint_id,
+        task_slug,
+        backend,
+    ) in _PROVISIONAL_M0_DEV_TESTED_ENTRYPOINT_TASK_BACKENDS:
+        return True
     if backend == "mjwarp":
         return (
             spec.entrypoint_id,
@@ -286,7 +308,7 @@ def render_support_matrix(root: Path | None = None) -> str:
         "| 等级 | 仓库事实来源 |",
         "|------|--------------|",
         "| `Registered` | `ensure_registries()` 导入后的 `registry.list_registered_envs()` 中存在该 env/backend。 |",
-        "| `Configured` | 存在对应的 owner YAML：`conf/{ppo,appo,offpolicy}/task/...`。 |",
+        "| `Configured` | 存在对应的 owner YAML：`conf/{ppo,appo,offpolicy,rlgames_sapg}/task/...`。 |",
         "| `Tested` | `tests/` 中有自动化覆盖该 entrypoint/task owner/backend 组合，或存在显式 maintainer 完整训练验证并具备近风险自动化测试。这里的 `Tested` 不等同于默认推荐路径。 |",
         "| `Benchmarked` | 存在与该组合绑定的已提交 benchmark manifest。 |",
         "| `Recommended` | 仓库中存在显式 recommendation 元数据。 |",
@@ -299,6 +321,10 @@ def render_support_matrix(root: Path | None = None) -> str:
         "mjwarp playback 仅支持显式、有限步数的 `record` 并复用 MuJoCo 离线 renderer，不支持 `auto`、"
         "interactive 或 native playback。其他 entrypoint 中出现的 `Registered` 只表示 env/backend registry "
         "identity，不代表对应算法、terrain、完整 DR 或 production training 支持。",
+        "",
+        "`RL-Games SAPG` / `simtoolreal` / MuJoCo 的 `Tested` 仅代表 M0-dev provisional "
+        "证据，固定为 `mujoco-uni-runtime==0.4.0.dev0`。它不是正式 "
+        "M0-release、benchmark、推荐路径或跨 backend/platform support。",
         "",
         benchmark_note,
         recommendation_note,
@@ -322,9 +348,10 @@ def render_support_matrix(root: Path | None = None) -> str:
             "### Source Index",
             "",
             "- Registry bootstrap: `src/unilab/envs/**` decorators via `unilab.base.registry.ensure_registries()`.",
-            "- Owner YAML scan: `conf/ppo/task/**`, `conf/appo/task/**`, `conf/offpolicy/task/**`.",
+            "- Owner YAML scan: `conf/ppo/task/**`, `conf/appo/task/**`, `conf/offpolicy/task/**`, `conf/rlgames_sapg/task/**`.",
             "- Generic compose coverage: `tests/config/test_config_system.py::test_supported_task_composes`.",
             "- Validated mjwarp entrypoints are explicitly recorded in `_MAINTAINER_VALIDATED_MJWARP_ENTRYPOINT_TASKS`; near-risk coverage lives in `tests/base/test_mjwarp_backend.py`, `tests/base/test_backend_conformance.py`, `tests/base/test_mjwarp_differential.py`, and `tests/base/test_mjwarp_playback.py`.",
+            "- The provisional SAPG entry is explicitly recorded in `_PROVISIONAL_M0_DEV_TESTED_ENTRYPOINT_TASK_BACKENDS`; its dependency/runtime and combination evidence lives in `tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json`, `tests/algos/rlgames_sapg/**`, and `tests/envs/manipulation/simtoolreal/test_m0_dev_matrix.py`.",
         ]
     )
     return "\n".join(lines)

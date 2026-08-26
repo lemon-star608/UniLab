@@ -9,8 +9,8 @@
 - `cmake`，本地安装流程所需，详见
   `docs/sphinx/source/zh_CN/1-getting_started/2-installation.md`。
 - 使用 `mujoco` extra 时：需要 C++17 工具链和 Python 开发头文件，
-  因为 `mujoco-uni-runtime` 仅以源码分发，`uv sync` 时会就地编译其原生扩展
-  （针对 lock 钉住的 mujoco 版本）。缺少这些依赖时，`make setup` 会在编译
+  因为当前 lock 从固定 Git source 安装 `mujoco-uni-runtime`，`uv sync` 时会就地编译
+  其原生扩展（针对 lock 钉住的 mujoco 版本）。缺少这些依赖时，`make setup` 会在编译
   `mujoco-uni-runtime` 时失败，报错 `fatal error: Python.h: No such file or directory`。
   - macOS：`xcode-select --install`
   - Ubuntu / Debian：`sudo apt-get install build-essential python3-dev`
@@ -47,6 +47,31 @@ make setup-motrix
 uv sync
 uv sync --extra motrix
 ```
+
+## SimToolReal RL-Games SAPG M0-dev（provisional）
+
+当前唯一完成本地复验的组合是 `rlgames_sapg` / `simtoolreal` / `mujoco`。同步命令是：
+
+```bash
+uv sync --extra mujoco --extra rlgames-sapg
+```
+
+`pyproject.toml` 和 `uv.lock` 将 `mujoco-uni-runtime==0.4.0.dev0` 固定到
+`https://github.com/lemon-star608/mujoco_uni.git` 的 commit
+`54a2197be5b0cd65e9d71ff884d8415191925136`。这是 M0-dev provisional identity，
+不是正式 `0.4.0` release，也没有对应的正式 sdist/artifact promotion。
+
+这条 dev 路径核验的 public ABI 包括 mixed model layouts、逐环境
+`BatchEnvPool.was_autoreset`、`BatchEnvPool(cpu_ids=...)` 和
+`BatchEnvPool.worker_cpu_ids()`。`cpu_ids=None` 仍交给操作系统调度；缺少上述 affinity
+ABI 的旧安装态不能用于这条路径。M0-dev manifest 中的 Python `3.13.15` 只表示外部
+MuJoCoUni 的构建/测试 provenance；UniLab/RL-Games SAPG 验收使用的规范环境是 Linux
+x86_64、Python `3.11.15`、MuJoCo `3.10.0`、PyTorch
+`2.7.0+cu128`、CUDA `12.8`、cuDNN `90701`。
+
+Linux/aarch64、Motrix、mjwarp 和其他平台/后端没有随本项获得 SAPG support；正式
+M0-release、artifact promotion 和 maintainer support judgment 均延期处理。这里的
+`Tested` 也不表示 `Recommended` 或 `Benchmarked`。
 
 ## conda 与 pip
 

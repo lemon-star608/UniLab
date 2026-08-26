@@ -10,8 +10,9 @@ live in the getting-started and algorithm pages.
 - `cmake`, required by the local setup documented in
   `docs/sphinx/source/zh_CN/1-getting_started/2-installation.md`.
 - For the `mujoco` extra: a C++17 toolchain and Python development headers,
-  because `mujoco-uni-runtime` ships as a source distribution and compiles its
-  native extension during `uv sync` (against the locked mujoco version).
+  because the current lock installs `mujoco-uni-runtime` from a pinned Git
+  source and compiles its native extension during `uv sync` (against the locked
+  mujoco version).
   Without them, `make setup` fails while building `mujoco-uni-runtime` with
   `fatal error: Python.h: No such file or directory`.
   - macOS: `xcode-select --install`
@@ -49,6 +50,36 @@ is unavailable, run the underlying sync directly:
 uv sync
 uv sync --extra motrix
 ```
+
+## SimToolReal RL-Games SAPG M0-dev (Provisional)
+
+The only locally reproduced combination is `rlgames_sapg` / `simtoolreal` /
+`mujoco`. Sync it with:
+
+```bash
+uv sync --extra mujoco --extra rlgames-sapg
+```
+
+`pyproject.toml` and `uv.lock` pin `mujoco-uni-runtime==0.4.0.dev0` to commit
+`54a2197be5b0cd65e9d71ff884d8415191925136` from
+`https://github.com/lemon-star608/mujoco_uni.git`. This is an M0-dev provisional
+identity, not a formal `0.4.0` release, and no formal sdist or artifact has been
+promoted for it.
+
+The verified public ABI covers mixed model layouts, per-environment
+`BatchEnvPool.was_autoreset`, `BatchEnvPool(cpu_ids=...)`, and
+`BatchEnvPool.worker_cpu_ids()`. `cpu_ids=None` continues to use OS scheduling;
+an older installation without the affinity ABI is not valid for this path.
+The external MuJoCoUni build/test provenance recorded in the M0-dev manifest
+uses Python `3.13.15`. The UniLab/RL-Games SAPG canonical validation platform
+is Linux x86_64 with
+Python `3.11.15`, MuJoCo `3.10.0`, PyTorch `2.7.0+cu128`, CUDA `12.8`, and
+cuDNN `90701`.
+
+Linux/aarch64, Motrix, mjwarp, and other platforms/backends did not gain SAPG
+support from this work. A formal M0 release, artifact promotion, and maintainer
+support judgment remain deferred. `Tested` here does not mean `Recommended` or
+`Benchmarked`.
 
 ## Conda And Pip
 
