@@ -1,1 +1,2 @@
 third_party/simtoolreal_rl_games/rl_games/**/*.py -whitespace
+src/unilab/assets/robots/kuka_sharpa/LICENSE.kuka_iiwa -whitespace
