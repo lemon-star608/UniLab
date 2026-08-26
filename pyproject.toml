@@ -53,7 +53,7 @@ mujoco = [
     # (uv prefer-locked semantics). The tested window is >=3.5,<3.11 — switch
     # within it via `make mujoco MJ=<version>`.
     "mujoco>=3.5",
-    "mujoco-uni-runtime==0.3.1",
+    "mujoco-uni-runtime==0.4.0.dev0",
     # pybind11/wheel are build requirements of mujoco-uni-runtime, which is
     # compiled in this environment (see no-build-isolation-package below).
     "pybind11>=2.12",
@@ -72,6 +72,9 @@ mjwarp = [
 ]
 motrix = ["motrixsim-core==0.8.2"]
 viser = ["viser>=1.0.26", "trimesh>=3.21.7"]
+rlgames-sapg = [
+    "unilab-simtoolreal-rl-games==1.6.1+simtoolreal.2a991753.compat2 ; sys_platform != 'linux' or platform_machine != 'aarch64'",
+]
 
 [dependency-groups]
 dev = ["pytest", "pytest-cov", "ruff", "mypy", "pyright>=1.1.408"]
@@ -87,6 +90,8 @@ url = "https://download-r2.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.uv.sources]
+mujoco-uni-runtime = { git = "https://github.com/lemon-star608/mujoco_uni.git", rev = "54a2197be5b0cd65e9d71ff884d8415191925136" }
+unilab-simtoolreal-rl-games = { path = "third_party/simtoolreal_rl_games", editable = true }
 torch = [
     { index = "r2-cu130", marker = "sys_platform=='linux' and platform_machine=='aarch64'" },
     { index = "pytorch-cu128", marker = "sys_platform=='linux' and platform_machine=='x86_64'" },

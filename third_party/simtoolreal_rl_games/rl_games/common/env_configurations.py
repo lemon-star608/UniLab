@@ -4,8 +4,8 @@ from rl_games.common import tr_helpers
 from rl_games.envs.brax import create_brax_env
 from rl_games.envs.envpool import create_envpool
 from rl_games.envs.cule import create_cule
-import gym
-from gym.wrappers import FlattenObservation, FilterObservation
+import gymnasium as gym
+from gymnasium.wrappers import FilterObservation, FlattenObservation
 import numpy as np
 import math
 

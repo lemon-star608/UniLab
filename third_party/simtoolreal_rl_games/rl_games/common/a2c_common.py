@@ -17,7 +17,7 @@ from rl_games.algos_torch import  model_builder
 from rl_games.interfaces.base_algorithm import  BaseAlgorithm
 import numpy as np
 import time
-import gym
+import gymnasium as gym
 
 from tensorboardX import SummaryWriter
 import torch 
