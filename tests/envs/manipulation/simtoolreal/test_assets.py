@@ -74,7 +74,9 @@ def test_training_asset_inventory_is_closed() -> None:
         assert candidate.is_file() and not candidate.is_symlink()
         path = candidate.resolve()
         assert MESH_ROOT.resolve() in path.parents
-    assert not any((MESH_ROOT / "left_sharpa_meshes" / name).exists() for name in RETIRED_COLLISION_MESHES)
+    assert not any(
+        (MESH_ROOT / "left_sharpa_meshes" / name).exists() for name in RETIRED_COLLISION_MESHES
+    )
     assert not list(ET.parse(robot_xml).iter("keyframe"))
     assert len(list(ET.parse(scene_xml).iter("keyframe"))) == 1
     assert provenance["mesh_census"] == {"total": 62, "byte_identical": 61, "different": 1}
@@ -92,9 +94,7 @@ def test_training_asset_inventory_is_closed() -> None:
         if entry["target"] == "assets/menagerie_sharpa_wave/LICENSE"
     )
     assert _sha256(MESH_ROOT / "menagerie_sharpa_wave/LICENSE") == menagerie_license["sha256"]
-    ancillary = {
-        entry["target"]: entry for entry in provenance["additional_assets"]
-    }
+    ancillary = {entry["target"]: entry for entry in provenance["additional_assets"]}
     for target in EXPECTED_ANCILLARY - {"menagerie_sharpa_wave/LICENSE"}:
         assert _sha256(MESH_ROOT / target) == ancillary[target]["sha256"]
     assert provenance["menagerie_sharpa_wave"]["repository_commit"] == (
@@ -133,13 +133,34 @@ def test_robot_xml_compiles_with_source_contract() -> None:
 
 
 EXPECTED_JOINTS = (
-    "iiwa14_joint_1", "iiwa14_joint_2", "iiwa14_joint_3", "iiwa14_joint_4",
-    "iiwa14_joint_5", "iiwa14_joint_6", "iiwa14_joint_7", "left_1_thumb_CMC_FE",
-    "left_thumb_CMC_AA", "left_thumb_MCP_FE", "left_thumb_MCP_AA", "left_thumb_IP",
-    "left_2_index_MCP_FE", "left_index_MCP_AA", "left_index_PIP", "left_index_DIP",
-    "left_3_middle_MCP_FE", "left_middle_MCP_AA", "left_middle_PIP", "left_middle_DIP",
-    "left_4_ring_MCP_FE", "left_ring_MCP_AA", "left_ring_PIP", "left_ring_DIP",
-    "left_5_pinky_CMC", "left_pinky_MCP_FE", "left_pinky_MCP_AA", "left_pinky_PIP",
+    "iiwa14_joint_1",
+    "iiwa14_joint_2",
+    "iiwa14_joint_3",
+    "iiwa14_joint_4",
+    "iiwa14_joint_5",
+    "iiwa14_joint_6",
+    "iiwa14_joint_7",
+    "left_1_thumb_CMC_FE",
+    "left_thumb_CMC_AA",
+    "left_thumb_MCP_FE",
+    "left_thumb_MCP_AA",
+    "left_thumb_IP",
+    "left_2_index_MCP_FE",
+    "left_index_MCP_AA",
+    "left_index_PIP",
+    "left_index_DIP",
+    "left_3_middle_MCP_FE",
+    "left_middle_MCP_AA",
+    "left_middle_PIP",
+    "left_middle_DIP",
+    "left_4_ring_MCP_FE",
+    "left_ring_MCP_AA",
+    "left_ring_PIP",
+    "left_ring_DIP",
+    "left_5_pinky_CMC",
+    "left_pinky_MCP_FE",
+    "left_pinky_MCP_AA",
+    "left_pinky_PIP",
     "left_pinky_DIP",
 )
 EXPECTED_ACTUATORS = tuple(f"{name}_ctrl" for name in EXPECTED_JOINTS)
@@ -159,7 +180,9 @@ def _body_geoms(element: ET.Element, body_name: str | None = None):
 def test_robot_xml_preserves_hand_structure_and_scene_ownership() -> None:
     root = ET.parse(ASSET_ROOT / "kuka_sharpa.xml").getroot()
     assert [joint.attrib["name"] for joint in root.iter("joint")] == list(EXPECTED_JOINTS)
-    assert [actuator.attrib["name"] for actuator in root.iter("position")] == list(EXPECTED_ACTUATORS)
+    assert [actuator.attrib["name"] for actuator in root.iter("position")] == list(
+        EXPECTED_ACTUATORS
+    )
     excludes = [(item.attrib["body1"], item.attrib["body2"]) for item in root.iter("exclude")]
     assert len(excludes) == 50
     assert not list(root.iter("keyframe"))
@@ -203,8 +226,10 @@ def test_sharpa_collision_geoms_have_explicit_role_contact_profile() -> None:
         )
         assert float(attrs["margin"]) == pytest.approx(0.0)
         assert float(attrs["gap"]) == pytest.approx(0.0)
-        expected_solref = (0.04, 1.0) if body_name.endswith("_DP") else (
-            (0.01, 1.0) if body_name == "left_hand_C_MC" else (0.02, 1.0)
+        expected_solref = (
+            (0.04, 1.0)
+            if body_name.endswith("_DP")
+            else ((0.01, 1.0) if body_name == "left_hand_C_MC" else (0.02, 1.0))
         )
         np.testing.assert_allclose(
             tuple(float(value) for value in attrs["solref"].split()),

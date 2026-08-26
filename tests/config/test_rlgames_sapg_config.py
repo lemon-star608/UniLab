@@ -8,6 +8,8 @@ from omegaconf import DictConfig, OmegaConf
 
 ROOT = Path(__file__).resolve().parents[2]
 CONF = ROOT / "conf/rlgames_sapg"
+
+
 def _compose(*overrides: str) -> DictConfig:
     with initialize_config_dir(config_dir=str(CONF), version_base="1.3"):
         return compose("config", overrides=list(overrides))
