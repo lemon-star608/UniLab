@@ -41,13 +41,13 @@
   <worldbody>
     <light pos="0 0 2.0" dir="0 0 -1" directional="true"/>
     <geom name="floor" pos="0 0 0" size="0 0 0.05" type="plane"
-      material="groundplane" friction="0.5 0.005 0.0001"/>
+      material="groundplane" friction="1.0 0.005 0.0001"/>
 
     <!-- Static table. Box 0.475 x 0.4 x 0.3 from assets/urdf/table_narrow.urdf,
          centred at ResetCfg.table_reset_z = 0.38, so the surface sits at 0.53. -->
     <body name="table" pos="0 0 0.38">
       <geom name="table_box" type="box" size="0.23749999999999999 0.20000000000000001 0.14999999999999999"
-        friction="0.5 0.005 0.0001" rgba="0.82 0.56 0.35 1.0"/>
+        friction="1.0 0.005 0.0001" rgba="0.82 0.56 0.35 1.0"/>
     </body>
   </worldbody>
 

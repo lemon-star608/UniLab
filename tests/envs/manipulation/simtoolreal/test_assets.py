@@ -226,13 +226,8 @@ def test_sharpa_collision_geoms_have_explicit_role_contact_profile() -> None:
         )
         assert float(attrs["margin"]) == pytest.approx(0.0)
         assert float(attrs["gap"]) == pytest.approx(0.0)
-        expected_solref = (
-            (0.04, 1.0)
-            if body_name.endswith("_DP")
-            else ((0.01, 1.0) if body_name == "left_hand_C_MC" else (0.02, 1.0))
-        )
         np.testing.assert_allclose(
             tuple(float(value) for value in attrs["solref"].split()),
-            expected_solref,
+            (0.02, 1.0),
             err_msg=f"unexpected solref for {body_name}: {attrs}",
         )

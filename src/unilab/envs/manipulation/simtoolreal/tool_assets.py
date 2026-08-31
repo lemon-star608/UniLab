@@ -29,21 +29,22 @@ def _tool_body(spec: ToolSpec) -> str:
         geoms.append(
             f'<geom name="object_handle_cyl_visual" type="cylinder" size="{_fmt((radius, half_length))}" '
             'quat="0.7071067811865476 0 -0.7071067811865476 0" '
-            'contype="0" conaffinity="0" density="0" rgba="0.55 0.27 0.07 1"/>'
+            'contype="0" conaffinity="0" density="0" friction="1.0 0.005 0.0001" '
+            'rgba="0.55 0.27 0.07 1"/>'
         )
         geoms.append(
             f'<geom name="object_handle_cyl" type="capsule" size="{_fmt((radius, half_length))}" '
-            f'quat="{quat}" friction="0.5 0.005 0.0001" density="0"/>'
+            f'quat="{quat}" friction="1.0 0.005 0.0001" density="0"/>'
         )
     else:
         geoms.append(
             f'<geom name="object_handle" type="box" size="{_fmt(spec.handle_size)}" '
-            'friction="0.5 0.005 0.0001" density="0" rgba="0.55 0.27 0.07 1"/>'
+            'friction="1.0 0.005 0.0001" density="0" rgba="0.55 0.27 0.07 1"/>'
         )
     if spec.head_size != (0.0, 0.0, 0.0):
         geoms.append(
             f'<geom name="object_head" type="box" size="{_fmt(spec.head_size)}" '
-            f'pos="{_fmt(spec.head_pos)}" friction="0.5 0.005 0.0001" density="0" '
+            f'pos="{_fmt(spec.head_pos)}" friction="1.0 0.005 0.0001" density="0" '
             'rgba="0.5 0.5 0.5 1"/>'
         )
     return (

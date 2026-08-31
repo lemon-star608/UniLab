@@ -72,8 +72,8 @@ class AssetsCfg:
     modify_asset_frictions: bool = True
     robot_friction: float = 0.5
     finger_tip_friction: float = 1.5
-    object_friction: float = 0.5
-    table_friction: float = 0.5
+    object_friction: float = 1.0
+    table_friction: float = 1.0
 
 
 @dataclass
@@ -363,8 +363,8 @@ class SimToolRealCfg(EnvCfg):
             ("modify_asset_frictions", True),
             ("robot_friction", 0.5),
             ("finger_tip_friction", 1.5),
-            ("object_friction", 0.5),
-            ("table_friction", 0.5),
+            ("object_friction", 1.0),
+            ("table_friction", 1.0),
         )
         for field_name, baked_value in baked_friction_cfg:
             configured_value = getattr(self.assets, field_name)

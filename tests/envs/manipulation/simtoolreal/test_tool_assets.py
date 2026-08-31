@@ -31,6 +31,19 @@ def test_representative_shipped_scene_compiles_for_each_topology(tmp_path: Path)
         for model_file in materialized.model_files:
             model = mujoco.MjModel.from_xml_path(model_file)
             assert (model.nq, model.nv, model.nu, model.nmesh) == (36, 35, 29, 62)
+            expected_friction = np.asarray((1.0, 0.005, 0.0001))
+            for geom_name in ("floor", "table_box"):
+                geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+                assert geom_id >= 0
+                np.testing.assert_allclose(model.geom_friction[geom_id], expected_friction)
+            object_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "object")
+            assert object_body_id >= 0
+            object_geom_ids = np.flatnonzero(np.asarray(model.geom_bodyid) == object_body_id)
+            assert object_geom_ids.size >= 1
+            np.testing.assert_allclose(
+                model.geom_friction[object_geom_ids],
+                np.broadcast_to(expected_friction, (object_geom_ids.size, 3)),
+            )
             assert model.opt.timestep == pytest.approx(1.0 / 120.0)
             assert model.opt.integrator == mujoco.mjtIntegrator.mjINT_IMPLICITFAST
             assert model.opt.solver == mujoco.mjtSolver.mjSOL_NEWTON

@@ -678,14 +678,14 @@
       "donor_blob": "389380675eeb4b0ed7a4989eeeb236a1fbd31d8b8",
       "donor_path": "src/unilab/assets/robots/kuka_sharpa/kuka_sharpa.xml",
       "pristine_donor_sha256": "a1a9cd9834d6c25fcc0946a5b1eb6919ad8e8794579b11b94d3eb4d954b2f2bf",
-      "target_sha256": "dfc93bdf56de09f7e5e503ec13a4a71588288541020d1279cef28aa01154cc7b"
+      "target_sha256": "7de888db380a2ec341a63c7ce6ae607be8d6c395532dbfbbc1f7240e60eab06f"
     },
     "scene": {
       "adaptation": "comment-only: removed stale reference to non-vendored build_simtoolreal_assets.py",
       "donor_blob": "69629b71d1299c1463a200880ab124b6543d3202",
       "donor_path": "src/unilab/assets/robots/kuka_sharpa/scene.xml",
       "pristine_donor_sha256": "8b960a3d0e9a21b113496c33f52c29d4b990fe1d439645bc31c9a130715c8533",
-      "target_sha256": "60e90d65daecd74416c10480a579a0aafe73a362abd185bf696919655829de69"
+      "target_sha256": "7853cf5387516cbc9364aa48cf5f8361bb55b764e01423eaa4ad43386dc0fd6e"
     }
   },
   "additional_assets": [

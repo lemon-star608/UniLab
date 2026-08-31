@@ -13,6 +13,8 @@ def test_config_defaults_preserve_source_contract() -> None:
     assert cfg.sim_dt == 1.0 / 120.0
     assert cfg.ctrl_dt == 1.0 / 60.0
     assert cfg.termination.episode_length == 600
+    assert cfg.assets.object_friction == 1.0
+    assert cfg.assets.table_friction == 1.0
     assert cfg.reset.object_spawn_z_reference_range == 0.0
     assert cfg.domain_randomization.force_only_when_lifted
     assert cfg.domain_randomization.torque_only_when_lifted

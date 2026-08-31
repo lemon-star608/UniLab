@@ -21,17 +21,20 @@ LICENSE 与 SOURCE.md。
 
 ## 接触 profile
 
-当前 profile 采用 reference + tip_stiff：
+本轮统一采用 reference 接触刚度：
 
 | Sharpa collision role | condim | friction | solimp | solref |
 | --- | ---: | --- | --- | --- |
-| palm | 3 | 1.0 0.005 0.0001 | 0.9 0.95 0.001 0.5 2.0 | 0.01 1.0 |
+| palm | 3 | 1.0 0.005 0.0001 | 0.9 0.95 0.001 0.5 2.0 | 0.02 1.0 |
 | regular finger segment | 3 | 1.0 0.005 0.0001 | 0.9 0.95 0.001 0.5 2.0 | 0.02 1.0 |
-| fingertip collision | 3 | 1.0 0.005 0.0001 | 0.9 0.95 0.001 0.5 2.0 | 0.04 1.0 |
+| fingertip collision | 3 | 1.0 0.005 0.0001 | 0.9 0.95 0.001 0.5 2.0 | 0.02 1.0 |
 
 所有 Sharpa collision geom 显式使用 contype=1、conaffinity=1、group=3、density=0、
 margin=0、gap=0；visual geom 使用 contype=0、conaffinity=0、group=2。当前 profile 不
 使用 tip_soft=[0.10, 0.8]。elastomer 继续是 visual-only。
+
+工具、floor 和 table 的 friction 统一为 `1.0 0.005 0.0001`；KUKA arm
+collision 继续使用 `0.5 0.005 0.0001`。
 
 全局 compiled MjModel.opt 由 scene.xml 唯一声明：
 
@@ -59,9 +62,9 @@ reset owner 仍显式写入机器人与 object qpos，训练行为和 home joint
 
 该 profile 不修改 reward、reset、goal sampling、domain randomization、episode length、
 object_name=handle_head_primitives、策略 observation/action layout、29 action 维度、
-工具池生成逻辑、table 尺寸/位置或 object pool seed/shuffle。floor、table 和动态工具的
-common friction 仍为 0.5 0.005 0.0001；common friction profile 不是独立 owner，
-AssetsCfg 和 tool_assets.py 的 friction 保持不变。
+工具池生成逻辑、table 尺寸/位置或 object pool seed/shuffle。KUKA arm collision 的
+friction 仍为 0.5 0.005 0.0001；工具、floor 和 table 的 friction 已统一调整为
+1.0 0.005 0.0001，并同步更新 AssetsCfg 与 tool_assets.py owner。
 
 ## Contract tests
 

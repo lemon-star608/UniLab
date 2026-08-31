@@ -9,3 +9,7 @@ rl_games:
   params:
     config:
       expl_coef_block_size: 2048
+env:
+    domain_randomization:
+      force_scale: 0.0
+      torque_scale: 0.0

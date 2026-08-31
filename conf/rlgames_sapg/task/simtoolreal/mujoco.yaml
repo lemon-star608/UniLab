@@ -69,12 +69,12 @@ env:
     object_state_xyz_noise_std: 0.01
     object_state_rotation_noise_degrees: 5.0
     joint_velocity_obs_noise_std: 0.1
-    force_scale: 20.0
+    force_scale: 0.0
     force_prob_range: [0.001, 0.1]
     force_decay: 0.0
     force_decay_interval: 0.08
     force_only_when_lifted: true
-    torque_scale: 2.0
+    torque_scale: 0.0
     torque_prob_range: [0.001, 0.1]
     torque_decay: 0.0
     torque_decay_interval: 0.08
