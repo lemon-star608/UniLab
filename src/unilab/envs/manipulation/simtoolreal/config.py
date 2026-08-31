@@ -47,12 +47,18 @@ class AssetsCfg:
     table_scale_range_x: tuple[float, float] = (1.0, 1.0)
     table_scale_range_y: tuple[float, float] = (1.0, 1.0)
     table_scale_num_variants: int = 1
+    # Optional cold-path DexToolBench task table. Empty keeps the formal
+    # 600-variant procedural pool and the scene's canonical table.
+    table_urdf: str = ""
 
     # Object pool selection (cfg:72-94). The reduced pool has 50 samples per matching
     # distribution (12 distributions × 50 = 600 compiled scenes).
     object_name: str = "handle_head_primitives"
     object_urdf: str = ""
     object_scale: tuple[float, float, float] | None = None
+    # Optional imported, task-level MJCF. When present this immutable scene is
+    # used directly; URDF paths remain the provenance record for the tool spec.
+    materialized_scene: str = ""
     handle_head_types: tuple[str, ...] = (
         "hammer",
         "screwdriver",

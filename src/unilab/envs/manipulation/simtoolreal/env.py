@@ -21,6 +21,10 @@ the observation packing boundary converts to ``xyzw``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, cast
+
 import gymnasium as gym
 import numpy as np
 
@@ -66,6 +70,20 @@ from .tool_catalog import build_tool_catalog
 # includes the robot before the object, so the object occupies the tail.
 OBJECT_QPOS_DIM = 7
 OBJECT_QVEL_DIM = 6
+
+
+class _PersistentCleanup:
+    name: str = ""
+
+    @staticmethod
+    def cleanup() -> None:
+        return None
+
+
+@dataclass(frozen=True)
+class _PersistentMaterializedScenes:
+    model_files: tuple[str, ...]
+    cleanup: _PersistentCleanup
 
 
 @registry.env("SimToolReal", sim_backend="mujoco")
@@ -222,6 +240,12 @@ class SimToolRealEnv(NpEnv):
         canon = np.asarray(
             [DEFAULT_JOINT_POS[name] for name in JOINT_NAMES_CANONICAL], dtype=self._np_dtype
         )
+        if self._cfg.reset.start_arm_higher:
+            # Match the source DexToolBench evaluator's startArmHigher pose:
+            # lift the elbow by rotating joints 2 and 4 by +/-10 degrees.
+            arm_raise = np.deg2rad(10.0)
+            canon[1] -= arm_raise
+            canon[3] += arm_raise
         canon = np.clip(canon, self._joint_lower_canon, self._joint_upper_canon)
         self._default_joint_pos_canon = np.ascontiguousarray(canon, dtype=self._np_dtype)
         self._default_joint_pos_backend = np.ascontiguousarray(
@@ -286,11 +310,72 @@ class SimToolRealEnv(NpEnv):
     def _prepare_tool_pool(self, cfg: SimToolRealCfg, num_envs: int) -> None:
         """Build immutable specs and complete source scenes on the cold path."""
         assets = cfg.assets
-        self._tool_catalog = build_tool_catalog(
-            types=assets.handle_head_types,
-            num_per_type=assets.num_assets_per_type,
-            seed=assets.object_pool_seed,
-            shuffle=assets.shuffle_assets,
+        self._tool_scenes: Any
+        if assets.materialized_scene:
+            from .dexbench_assets import _external_tool_spec
+
+            scene_path = Path(assets.materialized_scene).expanduser().resolve()
+            if not scene_path.is_file():
+                raise FileNotFoundError(f"materialized SimToolReal scene is missing: {scene_path}")
+            object_urdf = Path(assets.object_urdf).expanduser().resolve()
+            if not object_urdf.is_file() or assets.object_scale is None:
+                raise ValueError("materialized_scene requires object_urdf and object_scale")
+            decomposed = (
+                object_urdf
+                if object_urdf.stem.endswith("_decomposed")
+                else object_urdf.with_name(f"{object_urdf.stem}_decomposed.urdf")
+            )
+            if not decomposed.is_file():
+                raise FileNotFoundError(f"decomposed object URDF is missing: {decomposed}")
+            scale = cast(tuple[float, float, float], tuple(assets.object_scale))
+            self._tool_catalog = (_external_tool_spec(decomposed, scale),)
+            self._tool_index = np.zeros((num_envs,), dtype=np.int32)
+
+            cleanup = _PersistentCleanup()
+            cleanup.name = str(scene_path.parent)
+            self._tool_scenes = _PersistentMaterializedScenes((str(scene_path),), cleanup)
+            self._tool_variant_files = self._tool_scenes.model_files
+            return
+        if assets.object_urdf:
+            from .dexbench_assets import _external_tool_spec, materialize_external_scene
+
+            object_urdf = Path(assets.object_urdf).expanduser().resolve()
+            if object_urdf.stem.endswith("_decomposed"):
+                decomposed = object_urdf
+                visual_urdf = object_urdf.with_name(
+                    object_urdf.name.removesuffix("_decomposed.urdf") + ".urdf"
+                )
+            else:
+                visual_urdf = object_urdf
+                decomposed = object_urdf.with_name(f"{object_urdf.stem}_decomposed.urdf")
+            if not decomposed.is_file():
+                raise FileNotFoundError(
+                    f"decomposed DexToolBench object URDF is missing: {decomposed}"
+                )
+            if not visual_urdf.is_file():
+                raise FileNotFoundError(f"DexToolBench object URDF is missing: {visual_urdf}")
+            if assets.object_scale is None:
+                raise ValueError("assets.object_scale is required with assets.object_urdf")
+            scale = cast(tuple[float, float, float], tuple(assets.object_scale))
+            self._tool_catalog = (_external_tool_spec(decomposed, scale),)
+            self._tool_index = np.zeros((num_envs,), dtype=np.int32)
+            self._tool_scenes = materialize_external_scene(
+                cfg.scene.model_file,
+                object_urdf=visual_urdf,
+                decomposed_urdf=decomposed,
+                object_scale=scale,
+                table_urdf=assets.table_urdf or None,
+            )
+            self._tool_variant_files = self._tool_scenes.model_files
+            return
+        self._tool_catalog = cast(
+            Any,
+            build_tool_catalog(
+                types=assets.handle_head_types,
+                num_per_type=assets.num_assets_per_type,
+                seed=assets.object_pool_seed,
+                shuffle=assets.shuffle_assets,
+            ),
         )
         self._tool_index = (
             np.arange(num_envs, dtype=np.int32) % len(self._tool_catalog)
@@ -298,7 +383,7 @@ class SimToolRealEnv(NpEnv):
             else np.zeros((num_envs,), dtype=np.int32)
         )
         selected = self._tool_catalog if assets.object_pool_enabled else (self._tool_catalog[0],)
-        self._tool_scenes: MaterializedToolScenes = materialize_tool_scenes(
+        self._tool_scenes = materialize_tool_scenes(
             cfg.scene.model_file,
             selected,
         )
