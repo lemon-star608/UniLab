@@ -141,6 +141,7 @@ class MujocoViserScene:
         self._position_offset = np.asarray(position_offset, dtype=np.float64)
         self._render_plane = bool(render_plane)
         self._handles: dict[int, Any] = {}
+        self._hidden_geom_ids: set[int] = set()
         self._build()
 
     def reset(
@@ -173,6 +174,35 @@ class MujocoViserScene:
         for handle in self._handles.values():
             handle.remove()
         self._handles.clear()
+        self._hidden_geom_ids.clear()
+
+    def set_geom_visibility(self, prefixes: tuple[str, ...], visible: bool) -> None:
+        """Show or hide compiled geoms whose MuJoCo names match *prefixes*.
+
+        This lets an interactive shell replace a flat MuJoCo mesh with a
+        higher-fidelity textured asset while retaining the compiled scene for
+        physics and all other geometry.  Visibility is a rendering concern and
+        does not mutate the MuJoCo model.
+        """
+        for geom_id, handle in self._handles.items():
+            geom_name = mujoco.mj_id2name(self._model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or ""
+            if geom_name.startswith(prefixes):
+                handle.visible = bool(visible)
+                if visible:
+                    self._hidden_geom_ids.discard(geom_id)
+                else:
+                    self._hidden_geom_ids.add(geom_id)
+
+    def set_geom_group_visibility(self, groups: tuple[int, ...], visible: bool) -> None:
+        """Show or hide all compiled geoms assigned to MuJoCo render groups."""
+        selected = {int(group) for group in groups}
+        for geom_id, handle in self._handles.items():
+            if int(self._model.geom_group[geom_id]) in selected:
+                handle.visible = bool(visible)
+                if visible:
+                    self._hidden_geom_ids.discard(geom_id)
+                else:
+                    self._hidden_geom_ids.add(geom_id)
 
     # ------------------------------------------------------------------ #
     # Scene construction                                                  #
@@ -274,6 +304,13 @@ class MujocoViserScene:
         """Sync all geom transforms from *data* into the viser scene."""
         with self._server.atomic():
             for i, handle in self._handles.items():
+                # Collision/auxiliary geoms can be hidden by callers (for
+                # example, DexToolBench overlays the authored textured URDF
+                # and hides the compiled collision decomposition).  Avoid
+                # sending transforms for those handles on every frame; this
+                # materially reduces websocket traffic for mesh-heavy scenes.
+                if i in self._hidden_geom_ids:
+                    continue
                 xpos = data.geom_xpos[i] + self._position_offset
                 xmat = data.geom_xmat[i]
 

@@ -17,6 +17,7 @@ class _FakeHandle:
     def __init__(self) -> None:
         self.position = None
         self.wxyz = None
+        self.visible = True
         self.removed = False
 
     def remove(self) -> None:
@@ -106,6 +107,46 @@ def test_mujoco_viser_scene_applies_position_offset_and_close() -> None:
 
     scene.close()
     assert server.scene.handles[0].removed is True
+
+
+@pytest.mark.skipif(not VISER_AVAILABLE, reason="viser optional dependency is not installed")
+def test_mujoco_viser_scene_can_hide_geom_groups() -> None:
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco><worldbody>
+          <geom name="visual" type="box" size="0.1 0.1 0.1" group="2"/>
+          <geom name="collision" type="box" size="0.1 0.1 0.1" group="3"/>
+        </worldbody></mujoco>
+        """
+    )
+    server = _FakeServer()
+    scene = MujocoViserScene(server, model, render_plane=False)
+    scene.set_geom_group_visibility((3,), False)
+    assert [handle.visible for handle in server.scene.handles] == [True, False]
+    scene.close()
+
+
+@pytest.mark.skipif(not VISER_AVAILABLE, reason="viser optional dependency is not installed")
+def test_mujoco_viser_scene_skips_hidden_geoms_during_update() -> None:
+    model = mujoco.MjModel.from_xml_string(
+        """
+        <mujoco><worldbody>
+          <geom name="visual" type="box" size="0.1 0.1 0.1" group="2"/>
+          <geom name="collision" type="box" size="0.1 0.1 0.1" group="3"/>
+        </worldbody></mujoco>
+        """
+    )
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    server = _FakeServer()
+    scene = MujocoViserScene(server, model, render_plane=False)
+    scene.set_geom_group_visibility((3,), False)
+
+    scene.update(data)
+
+    assert server.scene.handles[0].position is not None
+    assert server.scene.handles[1].position is None
+    scene.close()
 
 
 def test_build_visible_env_indices_spreads_slots_across_full_batch() -> None:

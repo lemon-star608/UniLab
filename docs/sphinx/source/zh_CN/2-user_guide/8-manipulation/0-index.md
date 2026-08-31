@@ -23,6 +23,12 @@ Go2 加 Airbot 的运动/操作 owner 路径。
 Menagerie Sharpa collision geometry、reference + tip_stiff 参数和 contract owner。
 :::
 
+:::{grid-item-card} DexToolBench MuJoCo Viser
+:link: 4-dexbench-mujoco-viser
+:link-type: doc
+基于 manifest 和 MuJoCo worker 的真实工具交互验证。
+:::
+
 ::::
 
 ```{toctree}
@@ -31,4 +37,5 @@ Menagerie Sharpa collision geometry、reference + tip_stiff 参数和 contract o
 1-dexterous_inhand
 2-manip_loco
 3-simtoolreal_sharpa_collision
+4-dexbench-mujoco-viser
 ```

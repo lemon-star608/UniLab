@@ -1,0 +1,25 @@
+# Compose this file with the MuJoCo owner config and provide one checkpoint.
+defaults:
+  - config
+  - _self_
+
+training:
+  sim_backend: mujoco
+  task_name: SimToolReal
+  device: cpu
+  play_steps: 600
+  sim2sim_strict: true
+
+algo:
+  num_envs: 1
+
+dexbench:
+  manifest: src/unilab/assets/dexbench/manifest.json
+  category: hammer
+  object_name: claw_hammer
+  task_name: swing_side
+  port: 8080
+  render_hz: 60
+  deterministic: true
+  z_offset: 0.03
+  temp_root: null
