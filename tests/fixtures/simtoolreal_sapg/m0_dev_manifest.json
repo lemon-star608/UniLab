@@ -2,14 +2,14 @@
   "schema": "simtoolreal_sapg_m0_dev_manifest_v1",
   "distribution": {
     "name": "mujoco-uni-runtime",
-    "version": "0.4.0.dev0",
+    "version": "0.4.1.dev0",
     "formal_release": "deferred"
   },
   "source": {
     "url": "https://github.com/lemon-star608/mujoco_uni.git",
-    "ref": "refs/heads/feat/geom-size-pos-per-env-fields",
-    "commit": "54a2197be5b0cd65e9d71ff884d8415191925136",
-    "tree": "771de554330b698bc12e5110682af1d8de433ee2"
+    "ref": "refs/heads/feat/simtoolreal-minimal",
+    "commit": "10d6cd0a57b8940cc5cce163584a8826778024dd",
+    "tree": "83f2c3e9b35ae24b3a22047fc4f90ade37895e61"
   },
   "rebase_mapping": [
     {
@@ -21,20 +21,28 @@
       "role": "released worker CPU affinity baseline"
     },
     {
-      "commit": "614f26f1e65866bf611aca2852590989527a42ae",
-      "role": "per-env geom_size and geom_pos fields"
+      "commit": "e73e89aed3354d2180c8a04d85fb8cf8b57d6253",
+      "role": "upstream per-substep control_callback implementation"
     },
     {
-      "commit": "996004a461f2e61e722c6b7edc69e1b39a5f0396",
-      "role": "per-env autoreset and warning surface"
+      "commit": "c96290d05a40c74eec000b6fc864508483bb6a6e",
+      "role": "upstream 0.4.0 release"
     },
     {
-      "commit": "194ada65f76538631d5ddf9d7ebcbc44ca1e2c0e",
-      "role": "dominated mixed data layouts"
+      "commit": "b1d44334794ecef4dc17f4aee4b3839eaa42b5ab",
+      "role": "latest upstream 0.4.0 baseline after rebase"
     },
     {
-      "commit": "54a2197be5b0cd65e9d71ff884d8415191925136",
-      "role": "persistent mocap position reset"
+      "commit": "5282a874a2b8a82ceca916dbe4fc471aab3e4c96",
+      "role": "minimal mixed model data allocation envelope"
+    },
+    {
+      "commit": "3331dbd55a012096765d38df784ba3ac0af304f4",
+      "role": "minimal step autoreset mask"
+    },
+    {
+      "commit": "10d6cd0a57b8940cc5cce163584a8826778024dd",
+      "role": "0.4.1.dev0 package version bump"
     }
   ],
   "build_runtime": {
@@ -48,19 +56,17 @@
   },
   "external_tests": {
     "focused_command": "uv run pytest tests/test_cpu_affinity.py tests/test_batch_env.py -q",
-    "focused_passed": 26,
+    "focused_passed": 8,
     "focused_skipped": 0,
     "full_command": "uv run pytest tests -q",
-    "full_passed": 50,
+    "full_passed": 41,
     "full_skipped": 0
   },
   "mixed_layout_autoreset_evidence": {
-    "mixed_layout": "test_batch_env.py::test_per_env_isolation_geom_size_and_bounds",
+    "mixed_layout": "test_batch_env_parity.py::test_dominant_data_layout_model_supports_mixed_nc_serial_parity",
     "autoreset": [
-      "test_batch_env.py::test_step_flags_autoreset_per_env",
-      "test_batch_env.py::test_step_flags_autoreset_for_multiple_envs"
-    ],
-    "persistent_mocap": "test_batch_env.py::test_mocap_pos_reset_is_batched_persistent_and_indexed"
+      "test_batch_env.py::test_step_exposes_per_env_autoreset_mask"
+    ]
   },
   "public_abi": {
     "batch_env_pool_accepts_cpu_ids": true,
@@ -70,12 +76,12 @@
     "default_worker_cpu_ids": []
   },
   "target": {
-    "pyproject_source": "https://github.com/lemon-star608/mujoco_uni.git@54a2197be5b0cd65e9d71ff884d8415191925136",
-    "lock_source": "https://github.com/lemon-star608/mujoco_uni.git?rev=54a2197be5b0cd65e9d71ff884d8415191925136#54a2197be5b0cd65e9d71ff884d8415191925136",
+    "pyproject_source": "https://github.com/lemon-star608/mujoco_uni.git@10d6cd0a57b8940cc5cce163584a8826778024dd",
+    "lock_source": "https://github.com/lemon-star608/mujoco_uni.git?rev=10d6cd0a57b8940cc5cce163584a8826778024dd#10d6cd0a57b8940cc5cce163584a8826778024dd",
     "direct_url": {
       "url": "https://github.com/lemon-star608/mujoco_uni.git",
-      "requested_revision": "54a2197be5b0cd65e9d71ff884d8415191925136",
-      "commit_id": "54a2197be5b0cd65e9d71ff884d8415191925136"
+      "requested_revision": "10d6cd0a57b8940cc5cce163584a8826778024dd",
+      "commit_id": "10d6cd0a57b8940cc5cce163584a8826778024dd"
     },
     "sibling_checkout_dependency": false
   },

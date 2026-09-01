@@ -323,7 +323,7 @@ def render_support_matrix(root: Path | None = None) -> str:
         "identity，不代表对应算法、terrain、完整 DR 或 production training 支持。",
         "",
         "`RL-Games SAPG` / `simtoolreal` / MuJoCo 的 `Tested` 仅代表 M0-dev provisional "
-        "证据，固定为 `mujoco-uni-runtime==0.4.0.dev0`。它不是正式 "
+        "证据，固定为 `mujoco-uni-runtime==0.4.1.dev0`。它不是正式 "
         "M0-release、benchmark、推荐路径或跨 backend/platform support。",
         "",
         benchmark_note,

@@ -1819,8 +1819,8 @@ wheels = [
 
 [[package]]
 name = "mujoco-uni-runtime"
-version = "0.4.0.dev0"
-source = { git = "https://github.com/lemon-star608/mujoco_uni.git?rev=54a2197be5b0cd65e9d71ff884d8415191925136#54a2197be5b0cd65e9d71ff884d8415191925136" }
+version = "0.4.1.dev0"
+source = { git = "https://github.com/lemon-star608/mujoco_uni.git?rev=10d6cd0a57b8940cc5cce163584a8826778024dd#10d6cd0a57b8940cc5cce163584a8826778024dd" }
 dependencies = [
     { name = "mujoco" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -4012,7 +4012,7 @@ requires-dist = [
     { name = "mediapy" },
     { name = "motrixsim-core", marker = "extra == 'motrix'", specifier = "==0.8.2" },
     { name = "mujoco", marker = "extra == 'mujoco'", specifier = ">=3.5" },
-    { name = "mujoco-uni-runtime", marker = "extra == 'mujoco'", git = "https://github.com/lemon-star608/mujoco_uni.git?rev=54a2197be5b0cd65e9d71ff884d8415191925136" },
+    { name = "mujoco-uni-runtime", marker = "extra == 'mujoco'", git = "https://github.com/lemon-star608/mujoco_uni.git?rev=10d6cd0a57b8940cc5cce163584a8826778024dd" },
     { name = "mujoco-warp", marker = "extra == 'mjwarp'", specifier = "==3.10.0.3" },
     { name = "ninja", marker = "sys_platform == 'linux'" },
     { name = "numpy" },

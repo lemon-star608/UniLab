@@ -14,10 +14,10 @@ from mujoco_uni.batch_env import BatchEnvPool
 
 _ROOT = Path(__file__).resolve().parents[3]
 _PACKAGE = "mujoco-uni-runtime"
-_VERSION = "0.4.0.dev0"
+_VERSION = "0.4.1.dev0"
 _GIT_URL = "https://github.com/lemon-star608/mujoco_uni.git"
-_REV = "54a2197be5b0cd65e9d71ff884d8415191925136"
-_TREE = "771de554330b698bc12e5110682af1d8de433ee2"
+_REV = "10d6cd0a57b8940cc5cce163584a8826778024dd"
+_TREE = "83f2c3e9b35ae24b3a22047fc4f90ade37895e61"
 _MANIFEST = _ROOT / "tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json"
 
 
@@ -73,13 +73,13 @@ def test_m0_dev_manifest_records_reviewed_provenance_and_abi() -> None:
     }
     assert manifest["source"] == {
         "url": _GIT_URL,
-        "ref": "refs/heads/feat/geom-size-pos-per-env-fields",
+        "ref": "refs/heads/feat/simtoolreal-minimal",
         "commit": _REV,
         "tree": _TREE,
     }
-    assert manifest["external_tests"]["focused_passed"] == 26
+    assert manifest["external_tests"]["focused_passed"] == 8
     assert manifest["external_tests"]["focused_skipped"] == 0
-    assert manifest["external_tests"]["full_passed"] == 50
+    assert manifest["external_tests"]["full_passed"] == 41
     assert manifest["external_tests"]["full_skipped"] == 0
     assert manifest["public_abi"] == {
         "batch_env_pool_accepts_cpu_ids": True,

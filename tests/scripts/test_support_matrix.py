@@ -85,4 +85,4 @@ def test_support_matrix_marks_only_mujoco_simtoolreal_sapg_as_provisional_tested
 
     rendered = render_support_matrix(Path(__file__).resolve().parents[2])
     assert "M0-dev provisional" in rendered
-    assert "mujoco-uni-runtime==0.4.0.dev0" in rendered
+    assert "mujoco-uni-runtime==0.4.1.dev0" in rendered
