@@ -1,4 +1,4 @@
-"""Thin executor for the vendored native Runner/A2CAgent training path."""
+"""Thin executor for the external native Runner/A2CAgent training path."""
 
 from __future__ import annotations
 

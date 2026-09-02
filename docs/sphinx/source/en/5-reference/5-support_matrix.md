@@ -34,10 +34,10 @@ The current generator reports no checked-in benchmark manifest and no separate
 recommendation metadata, so rows do not auto-promote to `Benchmarked` or
 `Recommended`.
 
-`RL-Games SAPG` / `simtoolreal` / MuJoCo is `Tested` only for the M0-dev
-provisional identity `mujoco-uni-runtime==0.4.0.dev0`. It is not a
-formal M0 release, benchmark, recommendation, or cross-backend/platform support
-claim. Motrix and mjwarp remain unsupported for this entry.
+`RL-Games SAPG` / `simtoolreal` / MuJoCo is `Tested` for the task's MuJoCo
+owner and optional SAPG runtime. SAPG is installed with `--extra rlgames-sapg`
+from an immutable Git revision. This entry does not claim mjwarp, Motrix, or
+other backend support.
 
 ## Entrypoint x Task Owner
 
@@ -90,7 +90,5 @@ claim. Motrix and mjwarp remain unsupported for this entry.
   `conf/offpolicy/task/**`, `conf/rlgames_sapg/task/**`.
 - Generic compose coverage:
   `tests/config/test_config_system.py::test_supported_task_composes`.
-- Provisional SAPG evidence:
-  `tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json`,
-  `tests/algos/rlgames_sapg/**`, and
-  `tests/envs/manipulation/simtoolreal/test_m0_dev_matrix.py`.
+- SAPG coverage: `tests/algos/rlgames_sapg/**`; the runtime package is maintained
+  in the external `lemon-star608/simtoolreal-rl-games` repository.

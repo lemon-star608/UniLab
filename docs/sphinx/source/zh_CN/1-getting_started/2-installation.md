@@ -48,30 +48,18 @@ uv sync
 uv sync --extra motrix
 ```
 
-## SimToolReal RL-Games SAPG M0-dev（provisional）
+## SimToolReal RL-Games SAPG（可选）
 
-当前唯一完成本地复验的组合是 `rlgames_sapg` / `simtoolreal` / `mujoco`。同步命令是：
+SAPG runtime 维护在公开仓库
+[`lemon-star608/simtoolreal-rl-games`](https://github.com/lemon-star608/simtoolreal-rl-games)，
+不再放在 UniLab checkout 中。只有训练 SimToolReal SAPG owner 时才需要安装：
 
 ```bash
 uv sync --extra mujoco --extra rlgames-sapg
 ```
 
-`pyproject.toml` 和 `uv.lock` 将 `mujoco-uni-runtime==0.4.0.dev0` 固定到
-`https://github.com/lemon-star608/mujoco_uni.git` 的 commit
-`54a2197be5b0cd65e9d71ff884d8415191925136`。这是 M0-dev provisional identity，
-不是正式 `0.4.0` release，也没有对应的正式 sdist/artifact promotion。
-
-这条 dev 路径核验的 public ABI 包括 mixed model layouts、逐环境
-`BatchEnvPool.was_autoreset`、`BatchEnvPool(cpu_ids=...)` 和
-`BatchEnvPool.worker_cpu_ids()`。`cpu_ids=None` 仍交给操作系统调度；缺少上述 affinity
-ABI 的旧安装态不能用于这条路径。M0-dev manifest 中的 Python `3.13.15` 只表示外部
-MuJoCoUni 的构建/测试 provenance；UniLab/RL-Games SAPG 验收使用的规范环境是 Linux
-x86_64、Python `3.11.15`、MuJoCo `3.10.0`、PyTorch
-`2.7.0+cu128`、CUDA `12.8`、cuDNN `90701`。
-
-Linux/aarch64、Motrix、mjwarp 和其他平台/后端没有随本项获得 SAPG support；正式
-M0-release、artifact promotion 和 maintainer support judgment 均延期处理。这里的
-`Tested` 也不表示 `Recommended` 或 `Benchmarked`。
+UniLab 的 lockfile 会把 runtime 固定到不可变的 Git commit。该 owner 不支持
+Linux/aarch64，当前只支持 MuJoCo backend。
 
 ## conda 与 pip
 

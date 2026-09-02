@@ -91,7 +91,7 @@ explicit = true
 
 [tool.uv.sources]
 mujoco-uni-runtime = { git = "https://github.com/lemon-star608/mujoco_uni.git", rev = "10d6cd0a57b8940cc5cce163584a8826778024dd" }
-unilab-simtoolreal-rl-games = { path = "third_party/simtoolreal_rl_games", editable = true }
+unilab-simtoolreal-rl-games = { git = "https://github.com/lemon-star608/simtoolreal-rl-games.git", rev = "3b5363053d228a1b8b2ae49d3b828a8e5231ea83" }
 torch = [
     { index = "r2-cu130", marker = "sys_platform=='linux' and platform_machine=='aarch64'" },
     { index = "pytorch-cu128", marker = "sys_platform=='linux' and platform_machine=='x86_64'" },
@@ -120,7 +120,7 @@ required-environments = [
 line-length = 100
 target-version = "py310"
 src = ["src"]
-extend-exclude = [".history", "third_party/simtoolreal_rl_games"]
+extend-exclude = [".history"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

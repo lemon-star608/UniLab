@@ -47,7 +47,7 @@ uv run scripts/generate_support_matrix.py --write
 
 `mjwarp` 只支持 `g1_walk_flat` host adapter。PPO (torch) 与 SAC (torch) owner 已完成训练验证，并有 backend、contract 与 playback 自动化覆盖，因此标记为 `Tested`。mjwarp playback 仅支持显式、有限步数的 `record` 并复用 MuJoCo 离线 renderer，不支持 `auto`、interactive 或 native playback。其他 entrypoint 中出现的 `Registered` 只表示 env/backend registry identity，不代表对应算法、terrain、完整 DR 或 production training 支持。
 
-`RL-Games SAPG` / `simtoolreal` / MuJoCo 的 `Tested` 仅代表 M0-dev provisional 证据，固定为 `mujoco-uni-runtime==0.4.0.dev0`。它不是正式 M0-release、benchmark、推荐路径或跨 backend/platform support。
+`RL-Games SAPG` / `simtoolreal` / MuJoCo 的 `Tested` 仅覆盖该任务的 MuJoCo owner 和可选 SAPG runtime；SAPG 通过 `--extra rlgames-sapg` 从固定 Git commit 安装。该条目不代表 mjwarp、Motrix 或其他 backend support。
 
 未检测到与这些组合绑定的已提交 benchmark manifest，因此当前不会自动提升到 `Benchmarked`。
 仓库中目前也没有单独的 recommendation 元数据，因此当前不会自动提升到 `Recommended`。
@@ -127,5 +127,5 @@ uv run scripts/generate_support_matrix.py --write
 - Owner YAML scan: `conf/ppo/task/**`, `conf/appo/task/**`, `conf/offpolicy/task/**`, `conf/rlgames_sapg/task/**`.
 - Generic compose coverage: `tests/config/test_config_system.py::test_supported_task_composes`.
 - Validated mjwarp entrypoints are explicitly recorded in `_MAINTAINER_VALIDATED_MJWARP_ENTRYPOINT_TASKS`; near-risk coverage lives in `tests/base/test_mjwarp_backend.py`, `tests/base/test_backend_conformance.py`, `tests/base/test_mjwarp_differential.py`, and `tests/base/test_mjwarp_playback.py`.
-- The provisional SAPG entry is explicitly recorded in `_PROVISIONAL_M0_DEV_TESTED_ENTRYPOINT_TASK_BACKENDS`; its dependency/runtime and combination evidence lives in `tests/fixtures/simtoolreal_sapg/m0_dev_manifest.json`, `tests/algos/rlgames_sapg/**`, and `tests/envs/manipulation/simtoolreal/test_m0_dev_matrix.py`.
+- SAPG coverage lives in `tests/algos/rlgames_sapg/**`; the runtime package is maintained in the external `lemon-star608/simtoolreal-rl-games` repository.
 <!-- END GENERATED SUPPORT MATRIX -->

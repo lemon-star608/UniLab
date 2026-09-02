@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
-from pathlib import Path
+from importlib import metadata
 
 import pytest
 
@@ -14,18 +14,19 @@ def test_package_import_does_not_import_optional_runtime():
     assert after == before
 
 
-def test_guard_accepts_exact_editable_vendor_install():
+def test_guard_accepts_pinned_external_install():
     from unilab.algos.torch.rlgames_sapg.dependency import require_rlgames_sapg
 
+    try:
+        metadata.version("unilab-simtoolreal-rl-games")
+    except metadata.PackageNotFoundError:
+        pytest.skip("install --extra rlgames-sapg to test the optional runtime")
     identity = require_rlgames_sapg()
     assert identity.distribution == "unilab-simtoolreal-rl-games"
     assert identity.version == "1.6.1+simtoolreal.2a991753.compat2"
     assert identity.python_files == 72
     assert identity.compatibility_patches == 7
-    assert (
-        identity.vendor_root
-        == (Path(__file__).resolve().parents[3] / "third_party/simtoolreal_rl_games").resolve()
-    )
+    assert identity.package_root.name == "rl_games"
 
 
 def test_linux_aarch64_is_explicitly_unsupported(monkeypatch):

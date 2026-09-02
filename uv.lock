@@ -4032,7 +4032,7 @@ requires-dist = [
     { name = "tqdm" },
     { name = "trimesh", marker = "extra == 'viser'", specifier = ">=3.21.7" },
     { name = "typing-extensions" },
-    { name = "unilab-simtoolreal-rl-games", marker = "(platform_machine != 'aarch64' and extra == 'rlgames-sapg') or (sys_platform != 'linux' and extra == 'rlgames-sapg')", editable = "third_party/simtoolreal_rl_games" },
+    { name = "unilab-simtoolreal-rl-games", marker = "(platform_machine != 'aarch64' and extra == 'rlgames-sapg') or (sys_platform != 'linux' and extra == 'rlgames-sapg')", git = "https://github.com/lemon-star608/simtoolreal-rl-games.git?rev=3b5363053d228a1b8b2ae49d3b828a8e5231ea83" },
     { name = "viser", marker = "extra == 'viser'", specifier = ">=1.0.26" },
     { name = "wandb" },
     { name = "warp-lang", marker = "extra == 'mjwarp'", specifier = ">=1.14.0" },
@@ -4052,7 +4052,7 @@ dev = [
 [[package]]
 name = "unilab-simtoolreal-rl-games"
 version = "1.6.1+simtoolreal.2a991753.compat2"
-source = { editable = "third_party/simtoolreal_rl_games" }
+source = { git = "https://github.com/lemon-star608/simtoolreal-rl-games.git?rev=3b5363053d228a1b8b2ae49d3b828a8e5231ea83#3b5363053d228a1b8b2ae49d3b828a8e5231ea83" }
 dependencies = [
     { name = "gym" },
     { name = "gymnasium" },
@@ -4063,17 +4063,6 @@ dependencies = [
     { name = "tensorboardx" },
     { name = "torch", version = "2.7.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'x86_64' and sys_platform == 'linux') or (sys_platform != 'linux' and sys_platform != 'win32')" },
     { name = "torch", version = "2.7.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux') or sys_platform == 'win32'" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "gym", specifier = "==0.26.2" },
-    { name = "gymnasium", specifier = ">=1.0,<2" },
-    { name = "numpy", specifier = ">=1.24" },
-    { name = "omegaconf", specifier = ">=2.3" },
-    { name = "tensorboard", specifier = ">=2.8" },
-    { name = "tensorboardx", specifier = ">=2.5" },
-    { name = "torch", specifier = "==2.7.0" },
 ]
 
 [[package]]

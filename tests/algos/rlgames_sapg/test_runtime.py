@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import inspect
+from importlib import metadata
 from pathlib import Path
 
 import pytest
 from hydra import compose, initialize_config_dir
 
 ROOT = Path(__file__).resolve().parents[3]
+
+try:
+    metadata.version("unilab-simtoolreal-rl-games")
+except metadata.PackageNotFoundError:
+    pytest.skip(
+        "install --extra rlgames-sapg to test the optional runtime", allow_module_level=True
+    )
 
 
 def _cfg():
@@ -66,7 +75,7 @@ def test_native_executor_deep_copies_config_and_calls_exact_runner_path(
     assert cfg == before
 
 
-def test_actual_runner_and_agent_factories_are_vendored_native_owners():
+def test_actual_runner_and_agent_factories_come_from_external_runtime():
     from unilab.algos.torch.rlgames_sapg.runtime import create_native_runner
 
     runner = create_native_runner(object())
@@ -74,10 +83,7 @@ def test_actual_runner_and_agent_factories_are_vendored_native_owners():
     builder = runner.algo_factory._builders["a2c_continuous"]
     agent = builder
     assert callable(agent)
-    assert (
-        "a2c_continuous.A2CAgent"
-        in Path(ROOT / "third_party/simtoolreal_rl_games/rl_games/torch_runner.py").read_text()
-    )
+    assert inspect.getmodule(runner).__name__ == "rl_games.torch_runner"
 
 
 @pytest.mark.parametrize(
