@@ -1,67 +1,67 @@
 <mujoco model="kuka_sharpa">
   <compiler angle="radian" /><asset>
-    <mesh name="link_0_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_0.stl" />
-    <mesh name="link_0" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_0.stl" />
-    <mesh name="link_1_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_1.stl" />
-    <mesh name="link_1" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_1.stl" />
-    <mesh name="link_2_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_2.stl" />
-    <mesh name="link_2" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_2.stl" />
-    <mesh name="link_3_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_3.stl" />
-    <mesh name="link_3" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_3.stl" />
-    <mesh name="link_4_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_4.stl" />
-    <mesh name="link_4" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_4.stl" />
-    <mesh name="link_5_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_5.stl" />
-    <mesh name="link_5" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_5.stl" />
-    <mesh name="link_6_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_6.stl" />
-    <mesh name="link_6" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_6.stl" />
-    <mesh name="link_7_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/visual/link_7.stl" />
-    <mesh name="link_7" content_type="model/stl" file="../../robots/kuka_sharpa/assets/new_iiwa14_meshes/collision/link_7.stl" />
-    <mesh name="left_hand_C_MC_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_hand_C_MC_visual.STL" />
-    <mesh name="left_thumb_CMC_VL" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_thumb_CMC_VL.STL" />
-    <mesh name="left_thumb_MC_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_thumb_MC_visual.STL" />
-    <mesh name="left_thumb_MCP_VL_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_thumb_MCP_VL_visual.STL" />
-    <mesh name="left_thumb_PP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_thumb_PP_visual.STL" />
-    <mesh name="left_thumb_DP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_thumb_DP_visual.STL" />
-    <mesh name="thumb_elastomer_surface" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/thumb_elastomer_surface.STL" />
-    <mesh name="left_MCP_VL_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_MCP_VL_visual.STL" />
-    <mesh name="left_PP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_PP_visual.STL" />
-    <mesh name="left_MP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_MP_visual.STL" />
-    <mesh name="left_DP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_DP_visual.STL" />
-    <mesh name="elastomer_surface" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/elastomer_surface.STL" />
-    <mesh name="left_pinky_MC_visual" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_pinky_MC_visual.STL" />
-    <mesh name="left_pinky_MC" content_type="model/stl" file="../../robots/kuka_sharpa/assets/left_sharpa_meshes/left_pinky_MC.STL" />
-    <mesh name="menagerie_palm000" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm000.obj" />
-    <mesh name="menagerie_palm001" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm001.obj" />
-    <mesh name="menagerie_palm002" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm002.obj" />
-    <mesh name="menagerie_palm003" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm003.obj" />
-    <mesh name="menagerie_palm004" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm004.obj" />
-    <mesh name="menagerie_palm005" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm005.obj" />
-    <mesh name="menagerie_palm006" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm006.obj" />
-    <mesh name="menagerie_palm007" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm007.obj" />
-    <mesh name="menagerie_palm008" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm008.obj" />
-    <mesh name="menagerie_palm009" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm009.obj" />
-    <mesh name="menagerie_palm010" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm010.obj" />
-    <mesh name="menagerie_palm011" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm011.obj" />
-    <mesh name="menagerie_palm012" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm012.obj" />
-    <mesh name="menagerie_palm013" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm013.obj" />
-    <mesh name="menagerie_palm014" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm014.obj" />
-    <mesh name="menagerie_palm015" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm015.obj" />
-    <mesh name="menagerie_palm016" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm016.obj" />
-    <mesh name="menagerie_palm017" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm017.obj" />
-    <mesh name="menagerie_palm018" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm018.obj" />
-    <mesh name="menagerie_palm019" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm019.obj" />
-    <mesh name="menagerie_palm020" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm020.obj" />
-    <mesh name="menagerie_palm021" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm021.obj" />
-    <mesh name="menagerie_palm022" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm022.obj" />
-    <mesh name="menagerie_palm023" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm023.obj" />
-    <mesh name="menagerie_palm024" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm024.obj" />
-    <mesh name="menagerie_palm025" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm025.obj" />
-    <mesh name="menagerie_palm026" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm026.obj" />
-    <mesh name="menagerie_palm027" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm027.obj" />
-    <mesh name="menagerie_palm028" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm028.obj" />
-    <mesh name="menagerie_palm029" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm029.obj" />
-    <mesh name="menagerie_palm030" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm030.obj" />
-    <mesh name="menagerie_palm031" file="../../robots/kuka_sharpa/assets/menagerie_sharpa_wave/palm/palm031.obj" />
+    <mesh name="link_0_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_0.stl" />
+    <mesh name="link_0" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_0.stl" />
+    <mesh name="link_1_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_1.stl" />
+    <mesh name="link_1" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_1.stl" />
+    <mesh name="link_2_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_2.stl" />
+    <mesh name="link_2" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_2.stl" />
+    <mesh name="link_3_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_3.stl" />
+    <mesh name="link_3" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_3.stl" />
+    <mesh name="link_4_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_4.stl" />
+    <mesh name="link_4" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_4.stl" />
+    <mesh name="link_5_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_5.stl" />
+    <mesh name="link_5" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_5.stl" />
+    <mesh name="link_6_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_6.stl" />
+    <mesh name="link_6" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_6.stl" />
+    <mesh name="link_7_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/visual/link_7.stl" />
+    <mesh name="link_7" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/new_iiwa14_meshes/collision/link_7.stl" />
+    <mesh name="left_hand_C_MC_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_hand_C_MC_visual.STL" />
+    <mesh name="left_thumb_CMC_VL" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_thumb_CMC_VL.STL" />
+    <mesh name="left_thumb_MC_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_thumb_MC_visual.STL" />
+    <mesh name="left_thumb_MCP_VL_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_thumb_MCP_VL_visual.STL" />
+    <mesh name="left_thumb_PP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_thumb_PP_visual.STL" />
+    <mesh name="left_thumb_DP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_thumb_DP_visual.STL" />
+    <mesh name="thumb_elastomer_surface" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/thumb_elastomer_surface.STL" />
+    <mesh name="left_MCP_VL_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_MCP_VL_visual.STL" />
+    <mesh name="left_PP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_PP_visual.STL" />
+    <mesh name="left_MP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_MP_visual.STL" />
+    <mesh name="left_DP_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_DP_visual.STL" />
+    <mesh name="elastomer_surface" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/elastomer_surface.STL" />
+    <mesh name="left_pinky_MC_visual" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_pinky_MC_visual.STL" />
+    <mesh name="left_pinky_MC" content_type="model/stl" file="../../robots/kuka_sharpa/meshes/left_sharpa_meshes/left_pinky_MC.STL" />
+    <mesh name="menagerie_palm000" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm000.obj" />
+    <mesh name="menagerie_palm001" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm001.obj" />
+    <mesh name="menagerie_palm002" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm002.obj" />
+    <mesh name="menagerie_palm003" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm003.obj" />
+    <mesh name="menagerie_palm004" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm004.obj" />
+    <mesh name="menagerie_palm005" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm005.obj" />
+    <mesh name="menagerie_palm006" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm006.obj" />
+    <mesh name="menagerie_palm007" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm007.obj" />
+    <mesh name="menagerie_palm008" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm008.obj" />
+    <mesh name="menagerie_palm009" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm009.obj" />
+    <mesh name="menagerie_palm010" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm010.obj" />
+    <mesh name="menagerie_palm011" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm011.obj" />
+    <mesh name="menagerie_palm012" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm012.obj" />
+    <mesh name="menagerie_palm013" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm013.obj" />
+    <mesh name="menagerie_palm014" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm014.obj" />
+    <mesh name="menagerie_palm015" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm015.obj" />
+    <mesh name="menagerie_palm016" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm016.obj" />
+    <mesh name="menagerie_palm017" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm017.obj" />
+    <mesh name="menagerie_palm018" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm018.obj" />
+    <mesh name="menagerie_palm019" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm019.obj" />
+    <mesh name="menagerie_palm020" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm020.obj" />
+    <mesh name="menagerie_palm021" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm021.obj" />
+    <mesh name="menagerie_palm022" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm022.obj" />
+    <mesh name="menagerie_palm023" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm023.obj" />
+    <mesh name="menagerie_palm024" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm024.obj" />
+    <mesh name="menagerie_palm025" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm025.obj" />
+    <mesh name="menagerie_palm026" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm026.obj" />
+    <mesh name="menagerie_palm027" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm027.obj" />
+    <mesh name="menagerie_palm028" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm028.obj" />
+    <mesh name="menagerie_palm029" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm029.obj" />
+    <mesh name="menagerie_palm030" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm030.obj" />
+    <mesh name="menagerie_palm031" file="../../robots/kuka_sharpa/meshes/menagerie_sharpa_wave/palm/palm031.obj" />
   </asset>
   <worldbody>
     <body name="iiwa14_link_0" pos="0 0.8 0" quat="1 0 0 0" gravcomp="1">
