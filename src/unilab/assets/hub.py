@@ -27,6 +27,7 @@ _HF_CACHES_REPO_ID = "unilabsim/unilab-caches"
 _HF_SCENES_REPO_ID = "unilabsim/unilab-scenes"
 _HF_CHECKPOINTS_REPO_ID = "unilabsim/unilab-checkpoints"
 _HF_ROBOTS_REPO_ID = "unilabsim/unilab-robots"
+_HF_DEXBENCH_REPO_ID = "unilabsim/unilab-robots"
 _HF_REPO_TYPE = "dataset"
 _HF_OFFICIAL_ENDPOINT = "https://huggingface.co"
 
@@ -287,3 +288,9 @@ def resolve_robot_asset_dir(directory: str, *, marker: str) -> Path:
         Absolute ``Path`` to the resolved directory.
     """
     return _resolve_snapshot_dir(directory, repo_id=_HF_ROBOTS_REPO_ID, marker=marker)
+
+
+def resolve_dexbench_asset_dir(*, marker: str = ".hf_complete_v1") -> Path:
+    """Ensure the complete DexBench asset tree exists locally."""
+
+    return _resolve_snapshot_dir("dexbench", repo_id=_HF_DEXBENCH_REPO_ID, marker=marker)

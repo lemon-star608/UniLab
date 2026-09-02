@@ -1031,6 +1031,9 @@ def materialize_external_scene(
     temp_root: str | Path | None = None,
 ) -> MaterializedDexBenchScene:
     """Materialize one explicit external object/table into a UniLab scene."""
+    from .assets import ensure_training_assets
+
+    ensure_training_assets()
     source = Path(common_scene_file).resolve()
     object_task = DexBenchTaskAssets(
         source_root=source.parent,
@@ -1062,14 +1065,14 @@ def materialize_external_scene(
         if compiler is not None:
             robot_root.remove(compiler)
         # The source robot declares all joint limits and actuator defaults in
-        # radians.  Its original compiler also carries ``meshdir="assets"``;
+        # radians.  Its original compiler also carries ``meshdir="meshes"``;
         # that path is invalid after we rewrite mesh files to point at the
         # temporary self-contained scene, so keep the unit contract explicitly
         # while dropping only the stale mesh directory.
         robot_root.insert(0, ET.Element("compiler", {"angle": "radian"}))
         for mesh in robot_root.iter("mesh"):
             value = Path(mesh.get("file", ""))
-            mesh_path = (robot_source.parent / "assets" / value).resolve()
+            mesh_path = (robot_source.parent / "meshes" / value).resolve()
             mesh.set("file", os.path.relpath(mesh_path, Path(cleanup.name)))
         robot_copy = Path(cleanup.name) / "robot.xml"
         ET.ElementTree(robot_root).write(robot_copy, encoding="unicode")
@@ -1102,7 +1105,7 @@ def materialize_external_scene(
         # Copy the formal robot mesh bundle so the generated scene is
         # self-contained. External DexToolBench mesh references remain absolute
         # and are validated before this point.
-        (Path(cleanup.name) / "assets").mkdir()
+        (Path(cleanup.name) / "meshes").mkdir()
         ET.ElementTree(root).write(model_path, encoding="unicode")
         trajectory_path = Path(cleanup.name) / "trajectory.json"
         if trajectory is None:

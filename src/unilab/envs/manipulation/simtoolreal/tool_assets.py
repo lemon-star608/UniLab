@@ -84,9 +84,9 @@ def materialize_tool_scenes(
         prefix="simtoolreal_tools_",
         dir=str(temp_root) if temp_root is not None else None,
     )
-    assets_link = Path(cleanup.name) / "assets"
-    if source.parent.joinpath("assets").exists():
-        assets_link.symlink_to(source.parent / "assets", target_is_directory=True)
+    meshes_link = Path(cleanup.name) / "meshes"
+    if source.parent.joinpath("meshes").exists():
+        meshes_link.symlink_to(source.parent / "meshes", target_is_directory=True)
     model_files: list[str] = []
     try:
         for index, spec in enumerate(tools):

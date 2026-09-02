@@ -4,6 +4,8 @@ import json
 import time
 from pathlib import Path
 
+import pytest
+
 
 def _fake_worker(conn, spec):
     conn.send(
@@ -133,6 +135,7 @@ def test_registered_mujoco_worker_reaches_ready_state(tmp_path: Path) -> None:
     from scripts.play_dexbench_mujoco_viser import build_dexbench_env_override
 
     from unilab.algos.torch.rlgames_sapg.checkpoint_normalize import preflight_checkpoint
+    from unilab.envs.manipulation.simtoolreal.assets import ensure_dexbench_assets
     from unilab.envs.manipulation.simtoolreal.dexbench_assets import (
         load_dexbench_trajectory,
         resolve_dexbench_task,
@@ -142,9 +145,13 @@ def test_registered_mujoco_worker_reaches_ready_state(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[2]
     with initialize_config_dir(config_dir=str(root / "conf/rlgames_sapg"), version_base="1.3"):
         cfg = compose("dexbench_mujoco_viser")
-    task = resolve_dexbench_task(
-        root / "src/unilab/assets/dexbench/manifest.json", "hammer", "claw_hammer", "swing_side"
-    )
+    manifest = root / "src/unilab/assets/dexbench/manifest.json"
+    if not manifest.is_file():
+        try:
+            manifest = ensure_dexbench_assets() / "manifest.json"
+        except Exception as exc:
+            pytest.skip(f"DexBench assets unavailable: {exc}")
+    task = resolve_dexbench_task(manifest, "hammer", "claw_hammer", "swing_side")
     trajectory = load_dexbench_trajectory(task)
     trajectory_file = tmp_path / "trajectory.json"
     trajectory_file.write_text(

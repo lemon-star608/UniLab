@@ -1,5 +1,5 @@
 <mujoco model="kuka_sharpa">
-  <compiler angle="radian" meshdir="assets" />
+  <compiler angle="radian" meshdir="meshes" />
   <asset>
     <mesh name="link_0_visual" content_type="model/stl" file="new_iiwa14_meshes/visual/link_0.stl" />
     <mesh name="link_0" content_type="model/stl" file="new_iiwa14_meshes/collision/link_0.stl" />

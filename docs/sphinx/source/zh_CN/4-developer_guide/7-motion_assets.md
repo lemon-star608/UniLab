@@ -110,3 +110,23 @@ uv run unilab-pull-assets --robot x2
 - 机器人网格使用同一目录 resolver（`resolve_robot_asset_dir`），集成点为
   `src/unilab/envs/motion_tracking/x2/flip_tracking.py` 中的
   `X2WallFlipTrackingEnv.__init__`，并通过 `unilab-pull-assets` CLI 暴露。
+
+## SimToolReal 训练与 DexBench 资产
+
+Kuka/Sharpa 网格和 DexBench 对象/任务包统一托管在公开数据集
+[unilabsim/unilab-robots](https://huggingface.co/datasets/unilabsim/unilab-robots)。
+UniLab 仓库只保留任务 XML 和轻量级 notices。SimToolReal 环境在冷启动初始化阶段按需
+下载 Kuka 网格；DexBench Viser 入口在加载任务时按需下载 manifest 和对象资产。两者都
+缓存到 `src/unilab/assets/`，后续运行通过 marker 文件快速命中本地缓存。
+
+如需准备离线 checkout，可用 HF CLI 一次下载两个目录前缀：
+
+```bash
+huggingface-cli download unilabsim/unilab-robots \
+  --repo-type dataset \
+  --include 'robots/kuka_sharpa/**' 'dexbench/**' \
+  --local-dir src/unilab/assets
+```
+
+完整许可证文本和 `ASSET_PROVENANCE` 与二进制资产一起保存在数据集内；重新分发下载的
+资产时不要删除这些文件。

@@ -4,8 +4,8 @@
 palm000.obj 到
 palm031.obj，普通 MCP/PP/MP 指节使用 Menagerie cylinder/capsule fit，指尖使用
 capsule collision。Menagerie 资产位于
-src/unilab/assets/robots/kuka_sharpa/assets/menagerie_sharpa_wave/，并随附 Apache
-LICENSE 与 SOURCE.md。
+HF 数据集 `unilabsim/unilab-robots` 的
+`robots/kuka_sharpa/meshes/menagerie_sharpa_wave/`，并随附 Apache LICENSE 与 SOURCE.md。
 
 ## 唯一 owner
 
@@ -16,8 +16,8 @@ LICENSE 与 SOURCE.md。
   keyframe 和全局 MuJoCo option。工具不固定写入 robot XML。
 - tool_assets.py 仍在 cold path materialize 动态工具场景；六类工具各 50 个、pool seed、
   shuffle 和 object pool materialization 均未改变。
-- ASSET_PROVENANCE 记录 62 个最终 mesh、Menagerie pinned commits、Apache license/source
-  hash，以及 robot/scene XML hash。正式 XML 只使用相对路径，资产不是 symlink。
+- `ASSET_NOTICES.md` 指向 HF 上的完整许可证和 `ASSET_PROVENANCE`。正式 XML 只使用相对
+  路径，资产下载到本地后不是 symlink。
 
 ## 接触 profile
 
@@ -70,8 +70,8 @@ friction 仍为 0.5 0.005 0.0001；工具、floor 和 table 的 friction 已统�
 
 以下测试是本 profile 的维护入口：
 
-- tests/envs/manipulation/simtoolreal/test_assets.py：mesh inventory/hash、provenance、
-  robot XML 纯度、29 joint/actuator 顺序、50 excludes、Sharpa 接触属性和 visual bits。
+- tests/envs/manipulation/simtoolreal/test_assets.py：HF resolver、robot XML 纯度、29
+  joint/actuator 顺序、50 excludes、Sharpa 接触属性和 visual bits。
 - tests/envs/manipulation/simtoolreal/test_tool_assets.py：多种工具 topology 的
   materialized XML 编译、全局 option、finite reset/step。
 - tests/envs/manipulation/simtoolreal/test_env_integration.py：29 action、600-tool pool、

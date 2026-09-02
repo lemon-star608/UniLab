@@ -3,8 +3,11 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
-import yourdfpy
+import pytest
 
+yourdfpy = pytest.importorskip("yourdfpy")
+
+from unilab.envs.manipulation.simtoolreal.assets import ensure_dexbench_assets
 from unilab.envs.manipulation.simtoolreal.config import SimToolRealCfg
 from unilab.envs.manipulation.simtoolreal.dexbench_assets import (
     DEXTOOLBENCH_DATA_STRUCTURE,
@@ -14,13 +17,23 @@ from unilab.envs.manipulation.simtoolreal.dexbench_assets import (
 )
 from unilab.envs.manipulation.simtoolreal.env import SimToolRealEnv
 
-SOURCE_ROOT = Path("/home/user/ws/lemon/simtoolreal")
 MANIFEST = Path(__file__).resolve().parents[4] / "src/unilab/assets/dexbench/manifest.json"
+SCENE = Path(__file__).resolve().parents[4] / "src/unilab/assets/robots/kuka_sharpa/scene.xml"
 
 
-def test_checked_in_manifest_has_complete_dexbench_package() -> None:
-    validate_manifest(MANIFEST)
-    payload = __import__("json").loads(MANIFEST.read_text(encoding="utf-8"))
+@pytest.fixture(scope="module")
+def dexbench_manifest() -> Path:
+    if not MANIFEST.is_file():
+        try:
+            return ensure_dexbench_assets() / "manifest.json"
+        except Exception as exc:
+            pytest.skip(f"DexBench assets unavailable: {exc}")
+    return MANIFEST
+
+
+def test_manifest_has_complete_dexbench_package(dexbench_manifest: Path) -> None:
+    validate_manifest(dexbench_manifest)
+    payload = __import__("json").loads(dexbench_manifest.read_text(encoding="utf-8"))
     assert len(payload["objects"]) == 12
     assert len(payload["tasks"]) == 24
     assert {record["category"] for record in payload["objects"]} == set(DEXTOOLBENCH_DATA_STRUCTURE)
@@ -29,7 +42,7 @@ def test_checked_in_manifest_has_complete_dexbench_package() -> None:
     assert "objects/hammer/claw_hammer/material_0.png" in claw["sources"]
 
 
-def test_catalog_matches_dexbench_and_resolves_trajectory() -> None:
+def test_catalog_matches_dexbench_and_resolves_trajectory(dexbench_manifest: Path) -> None:
     assert set(DEXTOOLBENCH_DATA_STRUCTURE) == {
         "hammer",
         "marker",
@@ -39,15 +52,17 @@ def test_catalog_matches_dexbench_and_resolves_trajectory() -> None:
         "screwdriver",
     }
     assert sum(len(objects) for objects in DEXTOOLBENCH_DATA_STRUCTURE.values()) == 12
-    task = resolve_dexbench_task(SOURCE_ROOT, "hammer", "claw_hammer", "swing_side")
+    task = resolve_dexbench_task(dexbench_manifest, "hammer", "claw_hammer", "swing_side")
     assert task.object_urdf.name == "claw_hammer.urdf"
     assert task.decomposed_urdf.name == "claw_hammer_decomposed.urdf"
     assert task.trajectory.name == "swing_side.json"
     assert task.object_scale == (2.5, 0.5625, 0.375)
 
 
-def test_dexbench_visual_urdf_keeps_original_textured_mesh_sidecars() -> None:
-    task = resolve_dexbench_task(MANIFEST, "hammer", "claw_hammer", "swing_side")
+def test_dexbench_visual_urdf_keeps_original_textured_mesh_sidecars(
+    dexbench_manifest: Path,
+) -> None:
+    task = resolve_dexbench_task(dexbench_manifest, "hammer", "claw_hammer", "swing_side")
     urdf = yourdfpy.URDF.load(
         task.object_urdf,
         build_scene_graph=True,
@@ -61,15 +76,17 @@ def test_dexbench_visual_urdf_keeps_original_textured_mesh_sidecars() -> None:
     assert mesh.visual.material.image.size[1] > 2
 
 
-def test_dexbench_task_materializes_compilable_mujoco_scene(tmp_path: Path) -> None:
-    task = resolve_dexbench_task(SOURCE_ROOT, "hammer", "claw_hammer", "swing_side")
+def test_dexbench_task_materializes_compilable_mujoco_scene(
+    dexbench_manifest: Path, tmp_path: Path
+) -> None:
+    task = resolve_dexbench_task(dexbench_manifest, "hammer", "claw_hammer", "swing_side")
     materialized = materialize_dexbench_scene(
-        "/home/user/ws/lemon/rlgame-unilab/UniLab/src/unilab/assets/robots/kuka_sharpa/scene.xml",
+        SCENE,
         task,
         temp_root=tmp_path,
     )
     try:
-        generated_assets = Path(materialized.model_files[0]).parent / "assets"
+        generated_assets = Path(materialized.model_files[0]).parent / "meshes"
         assert generated_assets.is_dir() and not generated_assets.is_symlink()
         model = mujoco.MjModel.from_xml_path(materialized.model_files[0])
         assert model.nu == 29
@@ -154,8 +171,8 @@ def test_dexbench_task_materializes_compilable_mujoco_scene(tmp_path: Path) -> N
         materialized.cleanup.cleanup()
 
 
-def test_simtoolreal_can_own_a_selected_dexbench_object() -> None:
-    task = resolve_dexbench_task(SOURCE_ROOT, "hammer", "claw_hammer", "swing_side")
+def test_simtoolreal_can_own_a_selected_dexbench_object(dexbench_manifest: Path) -> None:
+    task = resolve_dexbench_task(dexbench_manifest, "hammer", "claw_hammer", "swing_side")
     cfg = SimToolRealCfg()
     cfg.assets.object_urdf = str(task.decomposed_urdf)
     cfg.assets.object_scale = task.object_scale
@@ -177,8 +194,8 @@ def test_simtoolreal_can_own_a_selected_dexbench_object() -> None:
         env.close()
 
 
-def test_dexbench_eval_start_arm_higher_matches_source_pose() -> None:
-    task = resolve_dexbench_task(SOURCE_ROOT, "hammer", "claw_hammer", "swing_side")
+def test_dexbench_eval_start_arm_higher_matches_source_pose(dexbench_manifest: Path) -> None:
+    task = resolve_dexbench_task(dexbench_manifest, "hammer", "claw_hammer", "swing_side")
     cfg = SimToolRealCfg()
     cfg.assets.object_urdf = str(task.decomposed_urdf)
     cfg.assets.object_scale = task.object_scale

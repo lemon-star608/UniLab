@@ -41,6 +41,10 @@ if str(ROOT_DIR) not in sys.path:
 
 from unilab.algos.torch.rlgames_sapg.checkpoint import resolve_native_checkpoint
 from unilab.algos.torch.rlgames_sapg.checkpoint_normalize import preflight_checkpoint
+from unilab.envs.manipulation.simtoolreal.assets import (
+    ensure_dexbench_assets,
+    ensure_training_assets,
+)
 from unilab.envs.manipulation.simtoolreal.dexbench_assets import (
     DexBenchTaskAssets,
     DexBenchTrajectory,
@@ -351,6 +355,10 @@ class DexBenchInteractiveDemo:
         ).expanduser()
         if not source_root.is_absolute():
             source_root = (self.root_dir / source_root).resolve()
+        default_manifest = (self.root_dir / "src/unilab/assets/dexbench/manifest.json").resolve()
+        if source_root == default_manifest and not source_root.is_file():
+            source_root = ensure_dexbench_assets() / "manifest.json"
+        ensure_training_assets()
         label = f"{_snake_to_title(category)} / {_snake_to_title(object_name)} / {_snake_to_title(task_name)}"
         self._set_markdown(self._md_status, f"**Status:** Loading *{label}* ...")
         self._set_markdown(self._md_task, f"**Task:** {label}")

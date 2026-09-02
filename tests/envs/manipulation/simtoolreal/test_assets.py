@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -11,7 +9,6 @@ import pytest
 ASSET_ROOT = (
     Path(__file__).resolve().parents[4] / "src" / "unilab" / "assets" / "robots" / "kuka_sharpa"
 )
-MESH_ROOT = ASSET_ROOT / "assets"
 EXPECTED_MESHES = {
     *(f"new_iiwa14_meshes/collision/link_{i}.stl" for i in range(8)),
     *(f"new_iiwa14_meshes/visual/link_{i}.stl" for i in range(8)),
@@ -31,99 +28,57 @@ EXPECTED_MESHES = {
     "left_sharpa_meshes/left_pinky_MC.STL",
     *(f"menagerie_sharpa_wave/palm/palm{i:03d}.obj" for i in range(32)),
 }
-EXPECTED_ANCILLARY = {
-    "menagerie_sharpa_wave/LICENSE",
-    "menagerie_sharpa_wave/SOURCE.md",
-}
-RETIRED_COLLISION_MESHES = {
-    "left_hand_C_MC.STL",
-    "left_thumb_MC.STL",
-    "left_thumb_PP.STL",
-    "left_thumb_DP.STL",
-    "thumb_elastomer.STL",
-    "MCP_VL.STL",
-    "left_PP.STL",
-    "left_MP.STL",
-    "left_DP.STL",
-    "elastomer.STL",
-}
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def test_ensure_training_assets_uses_robot_hub(monkeypatch, tmp_path: Path) -> None:
+    from unilab.envs.manipulation.simtoolreal import assets
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_resolve(directory: str, *, marker: str) -> Path:
+        calls.append((directory, marker))
+        return tmp_path
+
+    monkeypatch.setattr(assets, "resolve_robot_asset_dir", fake_resolve)
+    assert assets.ensure_training_assets() == tmp_path
+    assert calls == [("robots/kuka_sharpa/meshes", ".hf_complete_v1")]
+
+
+def test_ensure_dexbench_assets_uses_shared_hub(monkeypatch, tmp_path: Path) -> None:
+    from unilab.envs.manipulation.simtoolreal import assets
+
+    calls: list[str] = []
+
+    def fake_resolve(*, marker: str) -> Path:
+        calls.append(marker)
+        return tmp_path
+
+    monkeypatch.setattr(assets, "resolve_dexbench_asset_dir", fake_resolve)
+    assert assets.ensure_dexbench_assets() == tmp_path
+    assert calls == [".hf_complete_v1"]
 
 
 def test_training_asset_inventory_is_closed() -> None:
-    provenance = json.loads((ASSET_ROOT / "ASSET_PROVENANCE").read_text(encoding="utf-8"))
-    assert provenance["schema_version"] == 1
     robot_xml = ASSET_ROOT / "kuka_sharpa.xml"
     scene_xml = ASSET_ROOT / "scene.xml"
     assert robot_xml.is_file()
     assert scene_xml.is_file()
     assert "unilab.tools.build_simtoolreal_assets" not in scene_xml.read_text(encoding="utf-8")
+    assert ET.parse(robot_xml).getroot().find("compiler").attrib["meshdir"] == "meshes"
     refs = [element.attrib["file"] for element in ET.parse(robot_xml).iter("mesh")]
     assert len(refs) == 62
     assert len(set(refs)) == 62
     assert set(refs) == EXPECTED_MESHES
-    final_files = {
-        path.relative_to(MESH_ROOT).as_posix() for path in MESH_ROOT.rglob("*") if path.is_file()
-    }
-    assert final_files == EXPECTED_MESHES | EXPECTED_ANCILLARY
-    for ref in refs:
-        candidate = MESH_ROOT / ref
-        assert candidate.is_file() and not candidate.is_symlink()
-        path = candidate.resolve()
-        assert MESH_ROOT.resolve() in path.parents
-    assert not any(
-        (MESH_ROOT / "left_sharpa_meshes" / name).exists() for name in RETIRED_COLLISION_MESHES
-    )
     assert not list(ET.parse(robot_xml).iter("keyframe"))
     assert len(list(ET.parse(scene_xml).iter("keyframe"))) == 1
-    assert provenance["mesh_census"] == {"total": 62, "byte_identical": 61, "different": 1}
-    assert {entry["target"] for entry in provenance["meshes"]} == EXPECTED_MESHES
-    for entry in provenance["meshes"]:
-        target = MESH_ROOT / entry["target"]
-        assert _sha256(target) == entry["target_sha256"]
-    assert _sha256(robot_xml) == provenance["xml"]["robot"]["target_sha256"]
-    assert _sha256(scene_xml) == provenance["xml"]["scene"]["target_sha256"]
-    assert _sha256(ASSET_ROOT / "LICENSE.simtoolreal") == provenance["licenses"][0]["sha256"]
-    assert _sha256(ASSET_ROOT / "LICENSE.kuka_iiwa") == provenance["licenses"][1]["sha256"]
-    menagerie_license = next(
-        entry
-        for entry in provenance["licenses"]
-        if entry["target"] == "assets/menagerie_sharpa_wave/LICENSE"
-    )
-    assert _sha256(MESH_ROOT / "menagerie_sharpa_wave/LICENSE") == menagerie_license["sha256"]
-    ancillary = {entry["target"]: entry for entry in provenance["additional_assets"]}
-    for target in EXPECTED_ANCILLARY - {"menagerie_sharpa_wave/LICENSE"}:
-        assert _sha256(MESH_ROOT / target) == ancillary[target]["sha256"]
-    assert provenance["menagerie_sharpa_wave"]["repository_commit"] == (
-        "da76818e269b82289eba39808e2fb91d679d6994"
-    )
-    assert provenance["menagerie_sharpa_wave"]["sharpa_directory_commit"] == (
-        "c1a4eeb85694ae1dffe33ff1797d4e528928a133"
-    )
-    special = next(
-        entry
-        for entry in provenance["meshes"]
-        if entry["target"] == "left_sharpa_meshes/left_hand_C_MC_visual.STL"
-    )
-    assert special["donor_blob"] == "4eaa0d5d0d57fb42b50e8e66e91bf3904f9a47fa"
-    assert special["source_blob"] == "ec9632db49c79c84e25868a28c2796b350121360"
-    assert special["byte_identical"] is False
-    assert special["adaptation"] == {
-        "donor_owner": (
-            "src/unilab/tools/build_simtoolreal_assets.py:_convert_ascii_stl_to_binary"
-        ),
-        "geometry_preserved": True,
-        "kind": "ascii-stl-to-binary-stl",
-        "source_size_bytes": 1_254_651,
-        "target_size_bytes": 298_284,
-        "triangle_count": 5_964,
-    }
-    assert provenance["xml"]["scene"]["adaptation"] == (
-        "comment-only: removed stale reference to non-vendored build_simtoolreal_assets.py"
-    )
+
+
+def test_training_asset_notices_point_to_hf() -> None:
+    notices = (ASSET_ROOT / "ASSET_NOTICES.md").read_text(encoding="utf-8")
+    assert "unilabsim/unilab-robots" in notices
+    assert "LICENSE.simtoolreal" in notices
+    assert "LICENSE.kuka_iiwa" in notices
+    assert "Apache-2.0" in notices
 
 
 def test_robot_xml_compiles_with_source_contract() -> None:

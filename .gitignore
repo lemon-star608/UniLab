@@ -81,6 +81,10 @@ src/unilab/assets/motions/x2/*.csv
 
 # Robot mesh assets (downloaded from HF at runtime)
 src/unilab/assets/robots/x2/meshes/*.STL
+src/unilab/assets/robots/kuka_sharpa/meshes/
+
+# SimToolReal DexBench assets (downloaded from HF at runtime)
+src/unilab/assets/dexbench/
 
 # Grasp cache assets (downloaded from HF at runtime)
 src/unilab/assets/caches/*.npy

@@ -36,6 +36,7 @@ from unilab.dr import DomainRandomizationProvider
 from unilab.dtype_config import get_global_dtype
 
 from .action_pipeline import apply_action_pipeline
+from .assets import ensure_training_assets
 from .config import SimToolRealCfg
 from .constants import (
     DEFAULT_JOINT_POS,
@@ -377,6 +378,7 @@ class SimToolRealEnv(NpEnv):
                 shuffle=assets.shuffle_assets,
             ),
         )
+        ensure_training_assets()
         self._tool_index = (
             np.arange(num_envs, dtype=np.int32) % len(self._tool_catalog)
             if assets.object_pool_enabled

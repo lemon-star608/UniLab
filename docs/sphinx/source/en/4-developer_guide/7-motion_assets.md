@@ -124,3 +124,26 @@ To add a new robot's meshes:
   integrated at `X2WallFlipTrackingEnv.__init__` in
   `src/unilab/envs/motion_tracking/x2/flip_tracking.py`, and exposed as the
   `unilab-pull-assets` CLI.
+
+## SimToolReal Training and DexBench Assets
+
+The Kuka/Sharpa meshes and DexBench object/task package are hosted in the
+public [unilabsim/unilab-robots](https://huggingface.co/datasets/unilabsim/unilab-robots)
+dataset. UniLab keeps only the task XML and lightweight notices in Git. The
+SimToolReal environment downloads the Kuka mesh tree on its cold
+initialization path; the DexBench Viser entry point downloads the DexBench
+manifest and assets when a task is loaded. Both trees are cached under
+`src/unilab/assets/`, and subsequent runs use the marker-file fast path.
+
+To prepare an offline checkout, download both prefixes with the HF CLI:
+
+```bash
+huggingface-cli download unilabsim/unilab-robots \
+  --repo-type dataset \
+  --include 'robots/kuka_sharpa/**' 'dexbench/**' \
+  --local-dir src/unilab/assets
+```
+
+The full license texts and `ASSET_PROVENANCE` remain beside the binaries in
+the dataset. Do not remove those files when redistributing the downloaded
+assets.

@@ -6,8 +6,9 @@ SimToolReal 的 native RL-Games SAPG 权重。它复用原仓库 DexToolBench �
 `Load Environment`、`Run Episode`、`Pause/Resume`、`Stop Episode` 生命周期。
 
 与原仓库的差别只有两项：环境由 UniLab 注册的 MuJoCo 后端运行，机器人使用 UniLab 正式
-Sharpa XML（包括 Menagerie collision geometry 和 `reference + tip_stiff` 接触参数）。工具和
-任务 fixture 由导入阶段物化为版本库内的自包含场景；不会写入正式机器人 XML，也不会生成视频。
+Sharpa XML（包括 Menagerie collision geometry 和 `reference + tip_stiff` 接触参数）。DexBench
+二进制资产托管在公开 HF 数据集，首次加载任务时自动下载并缓存；不会写入正式机器人 XML，
+也不会生成视频。
 
 ## 启动
 
@@ -28,7 +29,16 @@ uv run scripts/play_dexbench_mujoco_viser.py \
 ```
 
 浏览器打开 `http://localhost:8083`，选择 category、object 和 task 后点击 Load。运行时只读
-manifest，不依赖 sibling checkout。若要从原仓库重新导入资产，使用一次性的离线命令：
+HF 缓存中的 manifest，不依赖 sibling checkout。若要在有网络环境中提前准备离线缓存，可执行：
+
+```bash
+huggingface-cli download unilabsim/unilab-robots \
+  --repo-type dataset \
+  --include 'robots/kuka_sharpa/**' 'dexbench/**' \
+  --local-dir src/unilab/assets
+```
+
+若要从原仓库重新生成 manifest，使用一次性的离线命令：
 
 默认 viewer 以 `dexbench.render_hz=60`（约 60 FPS）轮询 worker；如果机器或浏览器负载较高，
 可在启动命令中降低到 `dexbench.render_hz=30`。viewer 会丢弃积压的旧状态，只显示最新物理帧，
@@ -37,12 +47,12 @@ manifest，不依赖 sibling checkout。若要从原仓库重新导入资产，�
 ```bash
 uv run scripts/import_dexbench_assets.py \
   --source-root /path/to/simtoolreal \
-  --destination src/unilab/assets/dexbench \
+  --destination /tmp/unilab-dexbench \
   --common-scene src/unilab/assets/robots/kuka_sharpa/scene.xml
 ```
 
-导入器会校验 6 类、12 工具、24 任务和来源哈希；正式 viewer 使用
-`src/unilab/assets/dexbench/manifest.json`。
+导入器会校验 6 类、12 工具、24 任务和来源哈希；生成的目录可按发布流程上传到 HF，正式
+viewer 使用 `src/unilab/assets/dexbench/manifest.json`（首次运行时自动拉取）。
 
 ## 评估边界
 

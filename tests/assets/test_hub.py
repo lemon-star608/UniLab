@@ -9,7 +9,12 @@ import numpy as np
 import pytest
 
 from unilab.assets import ASSETS_ROOT_PATH
-from unilab.assets.hub import resolve_grasp_cache_files, resolve_motion_files, resolve_scene_dir
+from unilab.assets.hub import (
+    resolve_dexbench_asset_dir,
+    resolve_grasp_cache_files,
+    resolve_motion_files,
+    resolve_scene_dir,
+)
 
 # ---------------------------------------------------------------------------
 # Local-path fast path
@@ -277,3 +282,36 @@ def test_resolve_scene_dir_raises_import_error_when_hf_hub_missing(tmp_path: Pat
         with patch.dict("sys.modules", {"huggingface_hub": None}):
             with pytest.raises(ImportError, match="huggingface_hub"):
                 resolve_scene_dir("scenes/teaser")
+
+
+# DexBench directory resolver
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_dexbench_returns_immediately_when_marker_exists(tmp_path: Path):
+    dexbench_dir = tmp_path / "dexbench"
+    dexbench_dir.mkdir(parents=True)
+    (dexbench_dir / ".hf_complete_v1").write_text("complete\n")
+
+    with patch("unilab.assets.hub.ASSETS_ROOT_PATH", tmp_path):
+        result = resolve_dexbench_asset_dir()
+
+    assert result == dexbench_dir
+
+
+def test_resolve_dexbench_calls_snapshot_download_when_marker_missing(tmp_path: Path):
+    fake_snapshot = MagicMock(return_value=str(tmp_path))
+    fake_module = MagicMock()
+    fake_module.snapshot_download = fake_snapshot
+
+    with patch("unilab.assets.hub.ASSETS_ROOT_PATH", tmp_path):
+        with patch.dict("sys.modules", {"huggingface_hub": fake_module}):
+            result = resolve_dexbench_asset_dir()
+
+    assert result == tmp_path / "dexbench"
+    fake_snapshot.assert_called_once_with(
+        repo_id="unilabsim/unilab-robots",
+        repo_type="dataset",
+        allow_patterns="dexbench/**",
+        local_dir=str(tmp_path),
+    )
